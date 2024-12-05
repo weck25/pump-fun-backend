@@ -1,5 +1,4 @@
-// models/Coin.js
-import { number, required } from 'joi';
+// models/CoinStatus.js
 import mongoose from 'mongoose';
 
 const coinStatusSchema = new mongoose.Schema({
@@ -11,8 +10,7 @@ const coinStatusSchema = new mongoose.Schema({
         amount: { type: Number, default: 0 },
         price: { type: Number, required: true },
         tx: { type: String, required: true }
-    }
-    ]
+    }]
 });
 
 const CoinStatus = mongoose.model('CoinStatus', coinStatusSchema);

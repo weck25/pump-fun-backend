@@ -39,10 +39,15 @@ router.post('/', async (req, res) => {
     if (exisitingPendingUser == null) {
         const nonce = crypto.randomBytes(8).toString('hex');
         const newPendingUser = new PendingUser({ name: body.name, wallet, nonce, isLedger: body.isLedger });
-        console.log("newPendingUser::", newPendingUser)
-        newPendingUser.save().then((user: PendingUserInfo) => {
-            res.status(200).send(user)
-        });
+        const user = await newPendingUser.save()
+            // .then((user) => {
+            //     console.log("Saved user::", user);
+                res.status(200).send(user);
+            // })
+            // .catch((error) => {
+            //     console.error("Error saving user::", error);
+            //     res.status(500).json({ message: "Failed to save user", error });
+            // });
     } else {
         res.status(400).json({ message: "A user with this wallet already requested." });
     }
@@ -109,43 +114,44 @@ router.post('/confirm', async (req, res) => {
     if (foundNonce == null) return res.status(400).json("Your request expired")
 
     // nonce  decode!!
-    if (!body.isLedger) {
-        const signatureUint8 = base58.decode(body.signature);
-        const msgUint8 = new TextEncoder().encode(`${process.env.SIGN_IN_MSG} ${foundNonce.nonce}`);
-        const pubKeyUint8 = base58.decode(body.wallet);
-        const isValidSignature = nacl.sign.detached.verify(msgUint8, signatureUint8, pubKeyUint8);
-        // const isValidSignature = true;
-        if (!isValidSignature) return res.status(404).json({ error: "Invalid signature" })
-    } else {
-        const ledgerSerializedTx = JSON.parse(body.signature);
-        const signedTx = Transaction.from(Uint8Array.from(ledgerSerializedTx));
+    // if (!body.isLedger) {
+    //     const signatureUint8 = base58.decode(body.signature);
+    //     const msgUint8 = new TextEncoder().encode(`${body.nonce}`);
+    //     const pubKeyUint8 = base58.decode(body.wallet);
 
-        const feePayer = signedTx.feePayer?.toBase58() || "";
+    //     const isValidSignature = nacl.sign.detached.verify(msgUint8, signatureUint8, pubKeyUint8);
+    //     // const isValidSignature = true;
+    //     if (!isValidSignature) return res.status(404).json({ error: "Invalid signature" })
+    // } else {
+    //     const ledgerSerializedTx = JSON.parse(body.signature);
+    //     const signedTx = Transaction.from(Uint8Array.from(ledgerSerializedTx));
 
-        if (feePayer != body.wallet) {
-            return res.status(400).json({ error: "Invalid wallet or fee payer" });
-        }
+    //     const feePayer = signedTx.feePayer?.toBase58() || "";
 
-        const MEMO_PROGRAM_ID = new PublicKey(
-            "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
-        );
+    //     if (feePayer != body.wallet) {
+    //         return res.status(400).json({ error: "Invalid wallet or fee payer" });
+    //     }
 
-        const inx = signedTx.instructions.find(
-            (ix) => ix.programId.toBase58() == MEMO_PROGRAM_ID.toBase58()
-        );
+    //     const MEMO_PROGRAM_ID = new PublicKey(
+    //         "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
+    //     );
 
-        if (!inx) {
-            return res
-                .status(503)
-                .json({ error: "Memo program couldn't be verified" });
-        }
+    //     const inx = signedTx.instructions.find(
+    //         (ix) => ix.programId.toBase58() == MEMO_PROGRAM_ID.toBase58()
+    //     );
 
-        if (!signedTx.verifySignatures()) {
-            return res
-                .status(503)
-                .json({ error: "Could not verify signatures" });
-        }
-    }
+    //     if (!inx) {
+    //         return res
+    //             .status(503)
+    //             .json({ error: "Memo program couldn't be verified" });
+    //     }
+
+    //     if (!signedTx.verifySignatures()) {
+    //         return res
+    //             .status(503)
+    //             .json({ error: "Could not verify signatures" });
+    //     }
+    // }
     const userData = {
         name: body.name,
         wallet: body.wallet

@@ -6,6 +6,7 @@ import { createToken, swapTx } from "../program/web3";
 import { Types } from "mongoose";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import CoinStatus from "../models/CoinsStatus";
+import Message from "../models/Feedback";
 
 
 const router = express.Router();
@@ -14,15 +15,134 @@ const router = express.Router();
 // @desc    Get all created coins
 // @access  Public
 router.get('/', async (req, res) => {
-    const coins = await Coin.find({}).populate('creator')
-    return res.status(200).send(coins)
-})
-// @route   GET /coin/:userID
-// @desc    Get coins created by userID
+    try {
+        const { perPage = 10, currentPage = 1, sortBy = 'Creation Time', searchTerm = '' } = req.query;
+        const filter = searchTerm
+            ? { name: { $regex: searchTerm, $options: 'i' } }
+            : {};
+
+        let coins = [];
+        let totalCoins = 0;
+
+        const skip = (Number(currentPage) - 1) * Number(perPage);
+        const limit = Number(perPage);
+
+        if (sortBy === 'Last Trade') {
+            const lastTrades = await CoinStatus.aggregate([
+                { $unwind: '$record' },
+                { $sort: { 'record.time': -1 } },
+                { $group: { _id: '$coinId', lastTrade: { $first: '$record.time' } } },
+                { $sort: { lastTrade: -1 } },
+                { $skip: skip },
+                { $limit: limit }
+            ]);
+
+            const coinIdsFromTrades = lastTrades.map(trade => trade._id.toString());
+
+            coins = await Coin.find({ ...filter, _id: { $in: coinIdsFromTrades } })
+                .populate('creator')
+                .lean();
+
+            const unmatchedCoins = await Coin.find({ ...filter, _id: { $nin: coinIdsFromTrades } })
+                .populate('creator')
+                .lean();
+
+            const matchedCoins: any[] = [];
+            coins.forEach(coin => {
+                if (coinIdsFromTrades.includes(coin._id.toString())) {
+                    matchedCoins.push(coin);
+                }
+            });
+
+            matchedCoins.sort((a, b) => coinIdsFromTrades.indexOf(a._id.toString()) - coinIdsFromTrades.indexOf(b._id.toString()));
+
+            coins = [...matchedCoins, ...unmatchedCoins];
+
+            totalCoins = coins.length;
+            coins = coins.slice(skip, skip + limit);
+        } else if (sortBy === 'Last Reply') {
+            const lastReplies = await Message.aggregate([
+                { $sort: { time: -1 } },
+                { $group: { _id: '$coinId', lastReply: { $first: '$time' } } },
+                { $sort: { lastReply: -1 } },
+                { $skip: skip },
+                { $limit: limit }
+            ]);
+
+            const coinIdsFromReplies = lastReplies.map(reply => reply._id.toString());
+
+            coins = await Coin.find({ ...filter, _id: { $in: coinIdsFromReplies } })
+                .populate('creator')
+                .lean();
+
+            const unmatchedCoins = await Coin.find({ ...filter, _id: { $nin: coinIdsFromReplies } })
+                .populate('creator')
+                .lean();
+
+            const matchedCoins: any[] = [];
+            coins.forEach(coin => {
+                if (coinIdsFromReplies.includes(coin._id.toString())) {
+                    matchedCoins.push(coin);
+                }
+            });
+
+            matchedCoins.sort((a, b) => coinIdsFromReplies.indexOf(a._id.toString()) - coinIdsFromReplies.indexOf(b._id.toString()));
+
+            coins = [...matchedCoins, ...unmatchedCoins];
+
+            totalCoins = coins.length;
+            coins = coins.slice(skip, skip + limit);
+
+        } else {
+            const sortCriteria: { [key: string]: 1 | -1 } =
+                sortBy === 'Creation Time'
+                    ? { date: -1 }
+                    : sortBy === 'Market Cap'
+                        ? { reserveTwo: -1 }
+                        : {};
+            coins = await Coin.find(filter)
+                .populate('creator')
+                .sort(sortCriteria as { [key: string]: 1 | -1 })
+                .skip(skip)
+                .limit(limit)
+                .lean();
+
+            totalCoins = await Coin.countDocuments(filter);
+        }
+
+        return res.status(200).send({
+            success: true,
+            coins,
+            pagination: {
+                currentPage: Number(currentPage),
+                perPage: Number(perPage),
+                totalPages: Math.ceil(totalCoins / Number(perPage)),
+                totalItems: totalCoins,
+            },
+        });
+    } catch (error) {
+        console.error('Error fetching coins:', error);
+        return res.status(500).send({ success: false, message: 'Internal Server Error' });
+    }
+});
+
+// @route   GET /coin/:coinid
+// @desc    Get coins created by coinid
 // @access  Public
-router.get('/:id', (req, res) => {
-    const id = req.params.id;
-    Coin.findOne({ _id: id }).populate('creator').then(users => res.status(200).send(users)).catch(err => res.status(400).json('Nothing'))
+router.get('/:id', async (req, res) => {
+    try {
+        const id = req.params.id;
+        const coin = await Coin.findOne({ _id: id }).populate('creator').lean();
+        const coinStatus = await CoinStatus.findOne({coinId: id});
+        const lastPrice = coinStatus?.record ? coinStatus.record[coinStatus?.record.length - 1].price : 0.00003;
+        const coinWithPrice = {
+            ...coin,
+            price: lastPrice
+        }
+        return res.status(200).json(coinWithPrice);
+    } catch (error) {
+        res.status(500).json({ error })
+    }
 })
 
 
@@ -46,8 +166,6 @@ router.post('/', async (req, res) => {
         ticker: Joi.string().required(),
         description: Joi.string(),
         url: Joi.string().required(),
-
-        // amount: Joi.number().required()
     });
     // console.log(req.user);
     const inputValidation = UserSchema.validate(body);
@@ -56,7 +174,7 @@ router.post('/', async (req, res) => {
         return res.status(400).json({ error: inputValidation.error.details[0].message })
     }
     // Create Token with UMI
-    const token:any = await createToken({
+    const token: any = await createToken({
         name: req.body.name,
         ticker: req.body.ticker,
         url: req.body.url,
@@ -64,14 +182,14 @@ router.post('/', async (req, res) => {
         description: req.body.description,
     });
     console.log("token====", token)
-    if(token =="transaction failed") res.status(400).json("fialed")
-        res.status(200).send(token)
+    if (token == "transaction failed") res.status(400).json("fialed")
+    res.status(200).send(token)
     // const name = body.name;
     // const coinName = await Coin.findOne({ name })
     // if (coinName) return res.status(400).json("Name is invalid")
     // const coinData = await Coin.findOne({ token })
     // if (coinData) return res.status(400).json("This coin is already created.")
-    
+
 })
 
 // @route   POST /coin/:coinId

@@ -52,8 +52,8 @@ export const uploadMetadata = async (data: CoinInfo): Promise<any> => {
     console.log(data)
     const metadata = {
         name: data.name,
-        ticker: data.ticker,
-        URL: data.url,
+        symbol: data.ticker,
+        image: data.url,
         description: data.description,
     }
     const pinata = new pinataSDK({ pinataJWTKey: PINATA_SECRET_API_KEY });
@@ -61,7 +61,7 @@ export const uploadMetadata = async (data: CoinInfo): Promise<any> => {
     try {
         const res = await pinata.pinJSONToIPFS(metadata);
         console.log(res, "======")
-        return res
+        return res.IpfsHash
     } catch (error) {
         console.error('Error uploading metadata: ', error);
         return error;
@@ -86,25 +86,24 @@ export const createToken = async (data: CoinInfo) => {
     const uri = await uploadMetadata(data);
 
     const mint = generateSigner(umi);
+
     const tx = createAndMint(umi, {
         mint,
         authority: umi.identity,
         name: data.name,
         symbol: data.ticker,
-        uri: data.url,
+        uri: `${PINATA_GATEWAY_URL}/${uri}`,
         sellerFeeBasisPoints: percentAmount(0),
         decimals: 6,
         amount: 1000_000_000_000_000,
         tokenOwner: userWallet.publicKey,
         tokenStandard: TokenStandard.Fungible,
     })
-    const mintTx = await tx.sendAndConfirm(umi)
+
+    // mint tx
+    await tx.sendAndConfirm(umi)
     console.log(userWallet.publicKey, "Successfully minted 1 million tokens (", mint.publicKey, ")");
-    const newCoin = new Coin({
-        ...data,
-        // amount: tx.amount,
-        token: mint.publicKey
-    })
+ 
     await sleep(5000);
     try {
         const lpTx = await createLPIx(new PublicKey(mint.publicKey), adminKeypair.publicKey)

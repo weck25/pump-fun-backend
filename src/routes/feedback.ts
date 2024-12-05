@@ -1,7 +1,5 @@
 import express from "express";
 import Message from "../models/Feedback";
-import { Date, Types } from "mongoose";
-import { AuthRequest, auth } from "../middleware/authorization";
 
 const router = express.Router();
 
@@ -10,8 +8,11 @@ const router = express.Router();
 // @access  Public
 router.get('/coin/:coinId', (req, res) => {
     const coinId: string = req.params.coinId;
-    console.log(coinId)
-    Message.find({ coinId }).populate('coinId','sender').then(messages => res.status(200).send(messages))
+    Message.find({ coinId }).populate('coinId').populate('sender')
+        .then(messages => {
+            console.log(messages);
+            return res.status(200).send(messages);
+        })
         .catch(err => res.status(400).json(err));
 })
 
@@ -30,7 +31,10 @@ router.get('/user/:userId', (req, res) => {
 router.post('/', async (req, res) => {
     const { body } = req;
     try {
-        const newMsg = new Message(body);
+        const PINATA_GATEWAY_URL = process.env.PINATA_GATEWAY_URL;
+        const urlSeg = body.img.split('/');
+        const img = `${PINATA_GATEWAY_URL}/${urlSeg[urlSeg.length - 1]}`;
+        const newMsg = new Message({ ...body, img });
         const messages = await newMsg.save()
         return res.status(200).send(messages)
     } catch (err) {
