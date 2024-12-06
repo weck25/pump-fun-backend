@@ -1,5 +1,4 @@
 import { Server, Socket } from 'socket.io';
-
 import { logger } from './logger';
 // import { connectRedis } from './redis';
 
@@ -13,20 +12,15 @@ const socketio = async (server: any) => {
       },
     });
 
-    io.close(() => {
-      console.log('Server and all connected sockets closed');
-    });
-
-    
+    // Listen for new socket connections
     io.on('connection', async (socket: Socket) => {
       const id = (socket as any).user?.user?.id;
       console.log(`socket (${socket.id}) -> ${id}`);
-      
 
-      
+      // Here you can add more socket events or other logic for the connection
     });
 
-    // await connectRedis(io);
+    // await connectRedis(io); // If you are using Redis, uncomment this
 
     logger.info('  Socket server is running');
   } catch (err) {

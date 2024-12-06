@@ -7,19 +7,15 @@ import coinRoutes from './routes/coin'
 import messageRoutes from './routes/feedback'
 import coinTradeRoutes from './routes/coinTradeRoutes'
 import chartRoutes from './routes/chart'
-import { init } from './db/dbConncetion';
-
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors({
-  origin: "*"
+  origin: 'http://localhost:3001'
 }))
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-
-init()
 
 app.set('port', PORT)
 
