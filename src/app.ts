@@ -12,7 +12,9 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:3001', 'https://velas-fun.vercel.app, https://velas-hjxm6ko60-godhad.vercel.app']
+  origin: ['http://localhost:3000', 'http://localhost:3001', 'https://velas-fun.vercel.app, https://velas-hjxm6ko60-godhad.vercel.app'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }))
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
