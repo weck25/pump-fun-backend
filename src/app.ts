@@ -21,7 +21,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 init()
 
-app.set('port', 5000)
+app.set('port', PORT)
 
 app.use('/user/', userRoutes);
 app.use('/coin/', coinRoutes);
