@@ -6,7 +6,7 @@ const router = express.Router();
 router.get('/:userId', async (req, res) => {
     const userId: string = req.params.userId;
     const followers = await Follower.findOne({ userId }).populate('followers.follower');
-    return res.status(200).json(followers);
+    return res.status(200).json(followers)
 });
 
 router.post('/:userId', async (req, res) => {
