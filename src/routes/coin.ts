@@ -166,6 +166,13 @@ router.post('/', async (req, res) => {
         ticker: Joi.string().required(),
         description: Joi.string(),
         url: Joi.string().required(),
+        twitter: Joi.allow('').optional(),
+        telegram: Joi.allow('').optional(),
+        website: Joi.allow('').optional(),
+        logo: Joi.object().optional(),
+        reserveOne: Joi.number().optional(),
+        reserveTwo: Joi.number().optional(),
+        token: Joi.allow('').optional()
     });
     // console.log(req.user);
     const inputValidation = UserSchema.validate(body);
@@ -180,9 +187,12 @@ router.post('/', async (req, res) => {
         url: req.body.url,
         creator: req.body.creator,
         description: req.body.description,
+        website: req.body.website || '',
+        telegram: req.body.telegram || '',
+        twitter: req.body.twitter || ''
     });
     console.log("token====", token)
-    if (token == "transaction failed") res.status(400).json("fialed")
+    if (token == "transaction failed") return res.status(400).json("fialed")
     res.status(200).send(token)
     // const name = body.name;
     // const coinName = await Coin.findOne({ name })

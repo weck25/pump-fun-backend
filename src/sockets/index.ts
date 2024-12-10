@@ -2,10 +2,12 @@ import { Server, Socket } from 'socket.io';
 import { logger } from './logger';
 // import { connectRedis } from './redis';
 
+let io: Server;
+
 const socketio = async (server: any) => {
   try {
     // Socket communication
-    const io = new Server(server, {
+    io = new Server(server, {
       cors: {
         origin: '*',
         methods: ['GET', 'POST'],
@@ -18,6 +20,9 @@ const socketio = async (server: any) => {
       console.log(`socket (${socket.id}) -> ${id}`);
 
       // Here you can add more socket events or other logic for the connection
+      socket.on('transaction', (data) => {
+        io.emit('transaction', data);
+      })
     });
 
     // await connectRedis(io); // If you are using Redis, uncomment this
@@ -30,3 +35,5 @@ const socketio = async (server: any) => {
 };
 
 export default socketio;
+
+export const getIo = () => io;

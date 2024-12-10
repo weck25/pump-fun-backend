@@ -1,5 +1,5 @@
 import { TokenStandard, createAndMint, mplTokenMetadata } from "@metaplex-foundation/mpl-token-metadata";
-import { createSignerFromKeypair, generateSigner, percentAmount, signerIdentity } from "@metaplex-foundation/umi";
+import { createSignerFromKeypair, generateSigner, percentAmount, signerIdentity, TransactionBuilder } from "@metaplex-foundation/umi";
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
 import { ComputeBudgetProgram, Connection, PublicKey, SYSVAR_RENT_PUBKEY, Signer, SystemProgram, Transaction, TransactionResponse, VersionedTransaction, clusterApiUrl, sendAndConfirmTransaction } from "@solana/web3.js";
 import base58 from "bs58";
@@ -14,14 +14,11 @@ import { BN } from "bn.js";
 import { SwapAccounts, SwapArgs, swap } from "./cli/instructions";
 import * as anchor from "@coral-xyz/anchor"
 import { ASSOCIATED_PROGRAM_ID } from "@coral-xyz/anchor/dist/cjs/utils/token";
-import { LiquidityPool } from "./cli/accounts";
-import { string } from "joi";
-import { Int32 } from "mongodb";
 import { setCoinStatus } from "../routes/coinStatus";
 import CoinStatus from "../models/CoinsStatus";
 import { simulateTransaction } from "@coral-xyz/anchor/dist/cjs/utils/rpc";
 import pinataSDK from '@pinata/sdk';
-
+import { getIo } from "../sockets";
 
 const curveSeed = "CurveConfiguration"
 const POOL_SEED_PREFIX = "liquidity_pool"
@@ -55,6 +52,9 @@ export const uploadMetadata = async (data: CoinInfo): Promise<any> => {
         symbol: data.ticker,
         image: data.url,
         description: data.description,
+        telegram: data.telegram,
+        twitter: data.twitter,
+        website: data.website,
     }
     const pinata = new pinataSDK({ pinataJWTKey: PINATA_SECRET_API_KEY });
 
@@ -80,73 +80,99 @@ export const initializeTx = async () => {
     console.log("txId:", txId)
 }
 
+const retry = async (fn: () => Promise<any> | TransactionBuilder, retries = 3, delay = 1000): Promise<any> => {
+    for (let attempt = 0; attempt < retries; attempt++) {
+        try {
+            return await fn(); // Try to execute the function
+        } catch (error) {
+            if (attempt === retries - 1) throw error; // If no retries left, rethrow
+            console.log(`Retrying... (${attempt + 1}/${retries})`);
+            await new Promise((resolve) => setTimeout(resolve, delay)); // Wait before retrying
+        }
+    }
+};
 
 // Create Token and add liquidity transaction
 export const createToken = async (data: CoinInfo) => {
+    const io = getIo();
     const uri = await uploadMetadata(data);
-
+    
     const mint = generateSigner(umi);
-
-    const tx = createAndMint(umi, {
-        mint,
-        authority: umi.identity,
-        name: data.name,
-        symbol: data.ticker,
-        uri: `${PINATA_GATEWAY_URL}/${uri}`,
-        sellerFeeBasisPoints: percentAmount(0),
-        decimals: 6,
-        amount: 1000_000_000_000_000,
-        tokenOwner: userWallet.publicKey,
-        tokenStandard: TokenStandard.Fungible,
-    })
-
-    // mint tx
-    await tx.sendAndConfirm(umi)
-    console.log(userWallet.publicKey, "Successfully minted 1 million tokens (", mint.publicKey, ")");
- 
-    await sleep(5000);
+    
     try {
-        const lpTx = await createLPIx(new PublicKey(mint.publicKey), adminKeypair.publicKey)
-        const createTx = new Transaction().add(lpTx.ix);
-        createTx.feePayer = adminWallet.publicKey;
-        createTx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash
+        const tx = await retry(() =>
+            createAndMint(umi, {
+                mint,
+                authority: umi.identity,
+                name: data.name,
+                symbol: data.ticker,
+                uri: `${PINATA_GATEWAY_URL}/${uri}`,
+                sellerFeeBasisPoints: percentAmount(0),
+                decimals: 6,
+                amount: 1000_000_000_000_000,
+                tokenOwner: userWallet.publicKey,
+                tokenStandard: TokenStandard.Fungible,
+            }),
+            3,
+            2000
+        )
 
-        const txId = await sendAndConfirmTransaction(connection, createTx, [adminKeypair]);
-        console.log("txId:", txId)
-        // const checkTx = await checkTransactionStatus(txId);
-        const urlSeg = data.url.split('/');
-        const url = `${PINATA_GATEWAY_URL}/${urlSeg[urlSeg.length - 1]}`;
-        console.log(url)
-        console.log('great')
-        const newCoin = new Coin({
-            creator: data.creator,
-            name: data.name,
-            ticker: data.ticker,
-            description: data.description,
-            token: mint.publicKey,
-            url,
-        });
-        console.log(newCoin)
-        const response = await newCoin.save();
-        const newCoinStatus = new CoinStatus({
-            coinId: response._id,
-            record: [
-                {
-                    holder: response.creator,
-                    holdingStatus: 2,
-                    amount: 0,
-                    tx: txId,
-                    price: newCoin.reserveTwo / newCoin.reserveOne
-                }
-            ]
-        })
-        await newCoinStatus.save();
-        console.log("Saved Successfully...");
-        return response
+        // mint tx
+        await retry(() => tx.sendAndConfirm(umi), 3, 2000);
+        console.log(userWallet.publicKey, "Successfully minted 1 million tokens (", mint.publicKey, ")");
+
+        await sleep(5000);
+        try {
+            const lpTx = await retry(() => createLPIx(new PublicKey(mint.publicKey), adminKeypair.publicKey), 3, 2000);
+            const createTx = new Transaction().add(lpTx.ix);
+            createTx.feePayer = adminWallet.publicKey;
+            createTx.recentBlockhash = (await retry(() => connection.getLatestBlockhash(), 3, 2000)).blockhash
+
+            const txId = await retry(() => sendAndConfirmTransaction(connection, createTx, [adminKeypair]), 3, 2000);
+            console.log("txId:", txId)
+            // const checkTx = await checkTransactionStatus(txId);
+            const urlSeg = data.url.split('/');
+            const url = `${PINATA_GATEWAY_URL}/${urlSeg[urlSeg.length - 1]}`;
+            console.log(url)
+            console.log('great')
+            const newCoin = new Coin({
+                creator: data.creator,
+                name: data.name,
+                ticker: data.ticker,
+                description: data.description,
+                token: mint.publicKey,
+                telegram: data.telegram,
+                website: data.website,
+                twitter: data.twitter,
+                url,
+            });
+            console.log(newCoin)
+            const response = await newCoin.save();
+            const newCoinStatus = new CoinStatus({
+                coinId: response._id,
+                record: [
+                    {
+                        holder: response.creator,
+                        holdingStatus: 2,
+                        amount: 0,
+                        tx: txId,
+                        price: newCoin.reserveTwo / newCoin.reserveOne
+                    }
+                ]
+            })
+            await newCoinStatus.save();
+            console.log("Saved Successfully...");
+            io.emit('TokenCreated', data.name, mint.publicKey.slice(0, 6));
+            return response
+
+        } catch (error) {
+            io.emit('TokenNotCreated', data.name, mint.publicKey.slice(0, 6));
+            return "transaction failed"
+        }
     } catch (error) {
+        io.emit('TokenNotCreated', data.name, mint.publicKey.slice(0, 6));
         return "transaction failed"
     }
-
 }
 
 // check transaction
@@ -337,6 +363,9 @@ export interface CoinInfo {
     token?: string;
     reserve1?: number;
     reserve2?: number;
+    telegram?: string;
+    website?: string;
+    twitter?: string;
 }
 
 export interface ResultType {

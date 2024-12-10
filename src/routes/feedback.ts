@@ -1,5 +1,6 @@
 import express from "express";
 import Message from "../models/Feedback";
+import { getIo } from "../sockets";
 
 const router = express.Router();
 
@@ -30,13 +31,22 @@ router.get('/user/:userId', (req, res) => {
 // @access  Public
 router.post('/', async (req, res) => {
     const { body } = req;
+    console.log('new post')
     try {
-        const PINATA_GATEWAY_URL = process.env.PINATA_GATEWAY_URL;
-        const urlSeg = body.img.split('/');
-        const img = `${PINATA_GATEWAY_URL}/${urlSeg[urlSeg.length - 1]}`;
-        const newMsg = new Message({ ...body, img });
-        const messages = await newMsg.save()
-        return res.status(200).send(messages)
+        let newMsg;
+        if (body.img) {
+            const PINATA_GATEWAY_URL = process.env.PINATA_GATEWAY_URL;
+            const urlSeg = body.img.split('/');
+            const img = `${PINATA_GATEWAY_URL}/${urlSeg[urlSeg.length - 1]}`;
+            newMsg = new Message({ ...body, img });
+        } else {
+            newMsg = new Message({ ...body });
+        }
+        const message = await newMsg.save();
+        const populatedMessage = await message.populate('sender');
+        const io = getIo();
+        io.emit('new-post', populatedMessage);
+        return res.status(200).send(populatedMessage)
     } catch (err) {
         return res.status(400).json(err)
     }
