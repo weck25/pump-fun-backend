@@ -1,10 +1,7 @@
 import { NextFunction, Request, Response } from "express"
 import jwt from 'jsonwebtoken'
-import { UserInfo } from "../routes/user";
 
 export const auth = (req: AuthRequest, res: Response, next: NextFunction): void => {
-    // const { authorization } = req.headers;
-    // const token = authorization?.split(' ')[1];
     const authHeader = req.header('Authorization');
     const token = authHeader ? authHeader.replace('Bearer ', '') : null;
     if (!token) {

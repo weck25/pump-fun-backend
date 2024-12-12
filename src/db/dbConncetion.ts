@@ -1,13 +1,13 @@
-import database from "mongoose";
+import mongoose from "mongoose";
 
 require("dotenv").config("../.env");
 const DB_CONNECTION = process.env.MONGODB_URI;
 
 export const init = () => {
   if (DB_CONNECTION === undefined) return;
-  if (database.connection.readyState === database.ConnectionStates.connected)
+  if (mongoose.connection.readyState === mongoose.ConnectionStates.connected)
     return;
-  database
+  mongoose
     .connect(DB_CONNECTION)
     .then((v) => {
       console.log(`mongodb database connected`);

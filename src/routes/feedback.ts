@@ -7,24 +7,75 @@ const router = express.Router();
 // @route   GET /message/:
 // @desc    Get messages about this coin
 // @access  Public
-router.get('/coin/:coinId', (req, res) => {
+router.get('/coin/:coinId', async (req, res) => {
     const coinId: string = req.params.coinId;
-    Message.find({ coinId }).populate('coinId').populate('sender')
-        .then(messages => {
-            console.log(messages);
-            return res.status(200).send(messages);
-        })
-        .catch(err => res.status(400).json(err));
-})
+    const perPage = parseInt(req.query.perPage as string, 10) || 10; 
+    const currentPage = parseInt(req.query.currentPage as string, 10) || 1;
+
+    try {
+        const skip = (currentPage - 1) * perPage;
+
+        const messages = await Message.find({ coinId })
+            .populate('coinId')
+            .populate('sender')
+            .skip(skip)
+            .limit(perPage)
+            .lean();
+
+        const totalItems = await Message.countDocuments({ coinId });
+        const totalPages = Math.ceil(totalItems / perPage);
+
+        res.status(200).json({
+            pagination: {
+                totalItems,
+                totalPages,
+                currentPage: currentPage.toString(),
+                perPage: perPage.toString(),
+            },
+            messages
+        });
+    } catch (err) {
+        console.error('Error fetching messages:', err);
+        res.status(400).json({ message: 'Failed to fetch messages' });
+    }
+});
+
 
 // @route   GET /message/:
 // @desc    Get messages about this user
 // @access  Public
-router.get('/user/:userId', (req, res) => {
+router.get('/user/:userId', async (req, res) => {
     const sender: string = req.params.userId;
-    Message.find({ sender }).then(messages => res.status(200).send(messages))
-        .catch(err => res.status(400).json(err));
-})
+    const perPage = parseInt(req.query.perPage as string, 10) || 10; 
+    const currentPage = parseInt(req.query.currentPage as string, 10) || 1;
+
+    try {
+        const skip = (currentPage - 1) * perPage;
+
+        const messages = await Message.find({ sender })
+            .populate('coinId') 
+            .skip(skip)
+            .limit(perPage)
+            .lean();
+
+        const totalItems = await Message.countDocuments({ sender });
+        const totalPages = Math.ceil(totalItems / perPage);
+
+        res.status(200).json({
+            pagination: {
+                totalItems,
+                totalPages,
+                currentPage: currentPage.toString(),
+                perPage: perPage.toString(),
+            },
+            messages
+        });
+    } catch (err) {
+        console.error('Error fetching messages:', err);
+        res.status(400).json({ message: 'Failed to fetch messages' });
+    }
+});
+
 
 // @route   POST /message/
 // @desc    Save new Message

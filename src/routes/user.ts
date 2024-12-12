@@ -1,29 +1,23 @@
-// routes/users.js
+// routes/users.ts
 import express from 'express';
 import User from '../models/User';
 import PendingUser from '../models/PendingUser';
 import crypto from 'crypto'
 import Joi from 'joi';
-import base58 from 'bs58';
-import nacl from 'tweetnacl';
-import { PublicKey, Transaction } from '@solana/web3.js';
 import jwt from 'jsonwebtoken';
 
-
 const router = express.Router();
-
 
 // @route   POST api/users
 // @desc    Resgister user
 // @access  Public
 router.post('/', async (req, res) => {
-    console.log("wallet connect")
-    // Validate form
     const { body } = req;
     const UserSchema = Joi.object().keys({
         name: Joi.string().required(),
         wallet: Joi.string().required(),
         isLedger: Joi.boolean().optional().required(),
+        bio: Joi.allow('')
     })
     const inputValidation = UserSchema.validate(body);
     if (inputValidation.error) {
@@ -31,23 +25,18 @@ router.post('/', async (req, res) => {
     }
     const wallet = body.wallet;
     const userData = await User.findOne({ wallet });
-    console.log("userdata:", userData)
-    console.log(!userData == false)
-    if (!userData == false) return res.status(200).send(userData);
+    if (!userData == false) {
+        const token = jwt.sign({ id: userData._id, name: userData.name, wallet }, 'secret', { algorithm: 'HS256', expiresIn: '60m' });
+        return res.status(200).json({user: userData, token});
+    }
+
     const exisitingPendingUser = await PendingUser.findOne({ wallet })
-    console.log("pending:", exisitingPendingUser)
     if (exisitingPendingUser == null) {
         const nonce = crypto.randomBytes(8).toString('hex');
         const newPendingUser = new PendingUser({ name: body.name, wallet, nonce, isLedger: body.isLedger });
-        const user = await newPendingUser.save()
-            // .then((user) => {
-            //     console.log("Saved user::", user);
-                res.status(200).send(user);
-            // })
-            // .catch((error) => {
-            //     console.error("Error saving user::", error);
-            //     res.status(500).json({ message: "Failed to save user", error });
-            // });
+        const user = await newPendingUser.save();
+        const token = jwt.sign({ id: user._id, name: user.name, wallet }, 'secret', { algorithm: 'HS256', expiresIn: '60m' });
+        res.status(200).json({user, token});
     } else {
         res.status(400).json({ message: "A user with this wallet already requested." });
     }
@@ -58,7 +47,6 @@ router.post('/', async (req, res) => {
 // @access  Public
 router.post('/login', async (req, res) => {
     try {
-        console.log(req.body)
         const { wallet } = req.body;
         const user = await User.findOne({ wallet })
         if (!user) {
@@ -182,6 +170,19 @@ router.get('/:id', async (req, res) => {
         res.status(500).send(error);
     }
 });
+
+router.post('/update/:id', async (req, res) => {
+    try {
+        const { username, bio, url } = req.body;
+        const { id } = req.params;
+
+        const user = await User.findByIdAndUpdate(id, { name: username, bio, avatar: url }, { new: true });
+        return res.status(200).json(user);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json('Server Error');
+    }
+})
 
 
 

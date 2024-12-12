@@ -149,10 +149,37 @@ router.get('/:id', async (req, res) => {
 // @route   GET /coin/user/:userID
 // @desc    Get coins created by userID
 // @access  Public
-router.get('/user/:userID', (req, res) => {
+router.get('/user/:userID', async (req, res) => {
     const creator = req.params.userID;
-    Coin.find({ creator }).populate('creator').then(users => res.status(200).send(users)).catch(err => res.status(400).json('Nothing'))
-})
+    const perPage = parseInt(req.query.perPage as string, 10) || 10; 
+    const currentPage = parseInt(req.query.currentPage as string, 10) || 1; 
+
+    try {
+        const skip = (currentPage - 1) * perPage;
+
+        const coins = await Coin.find({ creator })
+            .populate('creator')
+            .skip(skip)
+            .limit(perPage)
+            .lean();
+
+        const totalItems = await Coin.countDocuments({ creator });
+        const totalPages = Math.ceil(totalItems / perPage);
+
+        res.status(200).json({
+            pagination: {
+                totalItems,
+                totalPages,
+                currentPage: currentPage.toString(),
+                perPage: perPage.toString(),
+            },
+            coins
+        });
+    } catch (err) {
+        console.error('Error fetching coins:', err);
+        res.status(400).json({ message: 'Nothing' });
+    }
+});
 
 // @route   POST /coin
 // @desc    Create coin

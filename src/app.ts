@@ -5,7 +5,7 @@ import cors from 'cors'
 import userRoutes from './routes/user'
 import coinRoutes from './routes/coin'
 import messageRoutes from './routes/feedback'
-import coinTradeRoutes from './routes/coinTradeRoutes'
+import coinTradeRoutes from './routes/coinTrade'
 import chartRoutes from './routes/chart'
 import followRoutes from './routes/follow';
 

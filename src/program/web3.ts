@@ -264,7 +264,7 @@ const logTx = connection.onLogs(PROGRAM_ID, async (logs, ctx) => {
     if (logs.logs[1].includes('AddLiquidity')) {
         return undefined
     }
-    console.log(logs)
+    console.log('log: ', logs)
     // Get parsed log data
     const parsedData: ResultType = parseLogs(logs.logs, logs.signature);
     console.log(parsedData);
@@ -328,6 +328,8 @@ function sleep(ms: number): Promise<void> {
 }
 // Get swap(buy and sell)
 function parseLogs(logs: string[], tx: string) {
+    console.log("---------------- logs -----------------");
+    console.log(logs)
     const result: ResultType = {
         tx,
         mint: '',
