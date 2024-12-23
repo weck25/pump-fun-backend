@@ -13,18 +13,18 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:3001']
+  origin: '*'
 }))
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 app.set('port', PORT)
 
-app.use('/user/', userRoutes);
-app.use('/coin/', coinRoutes);
-app.use('/feedback/', messageRoutes);
-app.use('/cointrade/', coinTradeRoutes)
-app.use('/chart/', chartRoutes)
-app.use('/follow/', followRoutes);
+app.use('/api/user/', userRoutes);
+app.use('/api/coin/', coinRoutes);
+app.use('/api/feedback/', messageRoutes);
+app.use('/api/cointrade/', coinTradeRoutes)
+app.use('/api/chart/', chartRoutes)
+app.use('/api/follow/', followRoutes);
 
 export  default app;
