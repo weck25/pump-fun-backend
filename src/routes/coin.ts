@@ -1,15 +1,22 @@
 import express from "express";
-import Joi, { string } from "joi";
+import Joi from "joi";
 import Coin from "../models/Coin";
-import { AuthRequest, auth } from "../middleware/authorization";
-import { createToken, swapTx } from "../program/web3";
-import { Types } from "mongoose";
-import { Keypair, PublicKey } from "@solana/web3.js";
 import CoinStatus from "../models/CoinsStatus";
 import Message from "../models/Feedback";
-
+import {
+    BuyTokenTxResult,
+    CreateTokenTxResult,
+    pollBuyTokenEventFromVelas,
+    pollCreateEventFromVelas,
+    pollSellTokenEventFromVelas,
+    ResultType,
+    SellTokenTxResult
+} from "../program/VelasFunContractService";
+import { getIo } from "../sockets";
+import { setCoinStatus } from "./coinStatus";
 
 const router = express.Router();
+const PINATA_GATEWAY_URL = process.env.PINATA_GATEWAY_URL;
 
 // @route   GET /coin/
 // @desc    Get all created coins
@@ -133,7 +140,7 @@ router.get('/:id', async (req, res) => {
     try {
         const id = req.params.id;
         const coin = await Coin.findOne({ _id: id }).populate('creator').lean();
-        const coinStatus = await CoinStatus.findOne({coinId: id});
+        const coinStatus = await CoinStatus.findOne({ coinId: id });
         const lastPrice = coinStatus?.record ? coinStatus.record[coinStatus?.record.length - 1].price : 0.00003;
         const coinWithPrice = {
             ...coin,
@@ -151,8 +158,8 @@ router.get('/:id', async (req, res) => {
 // @access  Public
 router.get('/user/:userID', async (req, res) => {
     const creator = req.params.userID;
-    const perPage = parseInt(req.query.perPage as string, 10) || 10; 
-    const currentPage = parseInt(req.query.currentPage as string, 10) || 1; 
+    const perPage = parseInt(req.query.perPage as string, 10) || 10;
+    const currentPage = parseInt(req.query.currentPage as string, 10) || 1;
 
     try {
         const skip = (currentPage - 1) * perPage;
@@ -185,8 +192,13 @@ router.get('/user/:userID', async (req, res) => {
 // @desc    Create coin
 // @access  Public
 router.post('/', async (req, res) => {
-    console.log("++++++++Create coin++++++++++", req.body.creator)
-    const { body } = req;
+    const { txHash, coin } = req.body;
+    const io = getIo();
+
+    if (!txHash) {
+        return res.status(400).json({ success: false, message: 'txHash is required' });
+    }
+
     const UserSchema = Joi.object().keys({
         creator: Joi.string().required(),
         name: Joi.string().required(),
@@ -201,32 +213,101 @@ router.post('/', async (req, res) => {
         reserveTwo: Joi.number().optional(),
         token: Joi.allow('').optional()
     });
-    // console.log(req.user);
-    const inputValidation = UserSchema.validate(body);
-    // console.log(inputValidation)
+
+    const inputValidation = UserSchema.validate(coin);
     if (inputValidation.error) {
         return res.status(400).json({ error: inputValidation.error.details[0].message })
     }
-    // Create Token with UMI
-    const token: any = await createToken({
-        name: req.body.name,
-        ticker: req.body.ticker,
-        url: req.body.url,
-        creator: req.body.creator,
-        description: req.body.description,
-        website: req.body.website || '',
-        telegram: req.body.telegram || '',
-        twitter: req.body.twitter || ''
-    });
-    console.log("token====", token)
-    if (token == "transaction failed") return res.status(400).json("fialed")
-    res.status(200).send(token)
-    // const name = body.name;
-    // const coinName = await Coin.findOne({ name })
-    // if (coinName) return res.status(400).json("Name is invalid")
-    // const coinData = await Coin.findOne({ token })
-    // if (coinData) return res.status(400).json("This coin is already created.")
 
+    const { success, txResult }: { success: boolean, txResult: CreateTokenTxResult | null } = await pollCreateEventFromVelas(txHash);
+    if (!txResult || !success) return res.status(404).json({ success: false, message: 'Transaction receipt not found' });
+
+    const oldCoin = await Coin.findOne({ token: (txResult as CreateTokenTxResult).tokenAddress });
+
+    if (oldCoin) return res.status(404).json({ success: false, message: 'Coin already saved' });
+
+    const urlSeg = coin.url.split('/');
+    const url = `${PINATA_GATEWAY_URL}/${urlSeg[urlSeg.length - 1]}`;
+
+    const newCoin = new Coin({
+        creator: coin.creator,
+        name: coin.name,
+        ticker: coin.ticker,
+        description: coin.description,
+        token: (txResult as CreateTokenTxResult).tokenAddress,
+        twitter: coin.twitter,
+        telegram: coin.telegram,
+        website: coin.website,
+        url,
+    });
+    const _newCoin = await newCoin.save();
+    const newCoinStatus = new CoinStatus({
+        coinId: _newCoin._id,
+        record: [
+            {
+                holder: _newCoin.creator,
+                holdingStatus: 2,
+                amount: 0,
+                tx: txHash,
+                price: 300_000 / 1_072_892_901
+            }
+        ]
+    })
+    await newCoinStatus.save();
+    io.emit('TokenCreated', coin.name, txResult.creator);
+
+    res.status(200).send(_newCoin);
+})
+
+router.post('/buy-tokens', async (req, res) => {
+    try {
+        const { txHash } = req.body;
+        if (!txHash) return res.status(400).json({ success: false, message: 'txHash is required' });
+        const { success, txResult }: { success: boolean, txResult: BuyTokenTxResult | null } = await pollBuyTokenEventFromVelas(txHash);
+        if (!txResult || !success) return res.status(404).json({ success: false, message: 'Transaction receipt not found' });
+
+        const data: ResultType = {
+            tx: txHash,
+            owner: txResult.buyer,
+            mint: txResult.tokenAddress,
+            swapType: 2,
+            swapAmount: txResult.amount,
+            reserve1: txResult.reserve0,
+            reserve2: txResult.reserve1,
+            price: txResult.price
+        }
+
+        await setCoinStatus(data);
+        return res.status(200).json({ success: true });
+    } catch (error) {
+        console.log(error)
+        return res.status(404).json({ success: false })
+    }
+})
+
+router.post('/sell-tokens', async (req, res) => {
+    try {
+        const { txHash } = req.body;
+        if (!txHash) return res.status(400).json({ success: false, message: 'txHash is required' });
+        const { success, txResult }: { success: boolean, txResult: SellTokenTxResult | null } = await pollSellTokenEventFromVelas(txHash);
+        if (!txResult || !success) return res.status(404).json({ success: false, message: 'Transaction receipt not found' });
+
+        const data: ResultType = {
+            tx: txHash,
+            owner: txResult.seller,
+            mint: txResult.tokenAddress,
+            swapType: 1,
+            swapAmount: txResult.tokenSold,
+            reserve1: txResult.reserve0,
+            reserve2: txResult.reserve1,
+            price: txResult.price
+        }
+
+        await setCoinStatus(data);
+        return res.status(200).json({ success: true });
+    } catch (error) {
+        return res.status(404).json({ success: false })
+    }
 })
 
 // @route   POST /coin/:coinId

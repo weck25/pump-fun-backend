@@ -27,7 +27,7 @@ const PINATA_SECRET_API_KEY = process.env.PINATA_SECRET_API_KEY
 const PINATA_GATEWAY_URL = process.env.PINATA_GATEWAY_URL;
 
 
-export const connection = new Connection(clusterApiUrl('devnet'))
+export const connection = new Connection("https://devnet.helius-rpc.com/?api-key=89e93f40-3f43-43c5-b9c9-37ff3ecf590d")
 
 const privateKey = base58.decode(process.env.PRIVATE_KEY!);
 
@@ -35,7 +35,7 @@ export const adminKeypair = web3.Keypair.fromSecretKey(privateKey);
 const adminWallet = new NodeWallet(adminKeypair);
 
 // const umi = createUmi(process.env.PUBLIC_SOLANA_RPC!);
-const umi = createUmi(clusterApiUrl('devnet'));
+const umi = createUmi("https://devnet.helius-rpc.com/?api-key=89e93f40-3f43-43c5-b9c9-37ff3ecf590d");
 
 const userWallet = umi.eddsa.createKeypairFromSecretKey(privateKey);
 
@@ -44,8 +44,6 @@ umi.use(signerIdentity(userWalletSigner));
 umi.use(mplTokenMetadata());
 
 export const uploadMetadata = async (data: CoinInfo): Promise<any> => {
-    // const url = data.url;
-    const url = 'https://api.pinata.cloud/pinning/pinFileToIPFS/'
     console.log(data)
     const metadata = {
         name: data.name,

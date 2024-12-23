@@ -7,10 +7,13 @@ const coinSchema = new mongoose.Schema({
     ticker: { type: String, required: true, },
     description: { type: String },
     token: { type: String, },
-    reserveOne: { type: Number, default: 1_000_000_000_000_000 },
-    reserveTwo: { type: Number, default: 30_000_000_000 },
+    reserveOne: { type: Number, default: 0 },
+    reserveTwo: { type: Number, default: 0 },
     url: { type: String, requried: true },
-    date:{type:Date, default:new Date}
+    twitter: { type: String },
+    telegram: { type: String },
+    website: { type: String },
+    date: { type: Date, default: new Date }
 });
 
 const Coin = mongoose.model('Coin', coinSchema);

@@ -6,6 +6,8 @@ import crypto from 'crypto'
 import Joi from 'joi';
 import jwt from 'jsonwebtoken';
 
+const PINATA_GATEWAY_URL = process.env.PINATA_GATEWAY_URL;
+
 const router = express.Router();
 
 // @route   POST api/users
@@ -174,9 +176,11 @@ router.get('/:id', async (req, res) => {
 router.post('/update/:id', async (req, res) => {
     try {
         const { username, bio, url } = req.body;
+        const urlSeg = url.split('/');
+        const _url = `${PINATA_GATEWAY_URL}/${urlSeg[urlSeg.length - 1]}`;
         const { id } = req.params;
 
-        const user = await User.findByIdAndUpdate(id, { name: username, bio, avatar: url }, { new: true });
+        const user = await User.findByIdAndUpdate(id, { name: username, bio, avatar: _url }, { new: true });
         return res.status(200).json(user);
     } catch (error) {
         console.error(error);

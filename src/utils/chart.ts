@@ -49,6 +49,8 @@ export async function fetchPriceChartData(pairIndex: number, start: number, end:
     case 120:
       candlePeriod = 7200; // 2 hours
       break;
+    default: 
+    candlePeriod = 60;
   }
 
   // Align cdStart and cdEnd with the specified start and end range
