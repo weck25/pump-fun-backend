@@ -8,50 +8,59 @@ const Coin_1 = __importDefault(require("../models/Coin"));
 const CoinsStatus_1 = __importDefault(require("../models/CoinsStatus"));
 const logger_1 = require("../sockets/logger");
 async function fetchPriceChartData(pairIndex, start, end, range, token) {
-    logger_1.logger.info(`  fetching chart data for pairIndex: ${pairIndex}, start: ${start}, end: ${end}, range: ${range}, token: ${token}`);
-    // load price histories from DB
+    if (start >= end) {
+        logger_1.logger.error("Invalid start and end range: start must be less than end");
+        return [];
+    }
+    // Fetch price history from DB within the start and end range
     const priceFeeds = await Coin_1.default.findOne({ token })
         .then(async (coin) => {
         const data = await CoinsStatus_1.default.findOne({ coinId: coin?._id }, { 'record.price': 1, 'record.time': 1 });
-        if (data == undefined)
-            return;
-        return data?.record;
+        if (!data)
+            return [];
+        return data.record.filter(feed => feed.time.getTime() / 1000 >= start && feed.time.getTime() / 1000 <= end);
     });
-    if (priceFeeds == undefined)
-        return;
-    const priceHistory = priceFeeds.map((feed) => {
-        let price = feed.price;
-        return {
-            price: price,
-            ts: feed.time.getTime() / 1000,
-        };
-    }).sort((price1, price2) => price1.ts - price2.ts);
-    if (!priceHistory.length)
+    if (!priceFeeds || !priceFeeds.length) {
+        logger_1.logger.warn("No price feed data found for the specified range.");
         return [];
-    let candlePeriod = 60; // 1 min  default
+    }
+    // Sort price history by timestamp
+    const priceHistory = priceFeeds.map((feed) => ({
+        price: feed.price,
+        ts: feed.time.getTime() / 1000,
+    })).sort((a, b) => a.ts - b.ts);
+    // Ensure priceHistory is not empty
+    if (!priceHistory.length) {
+        logger_1.logger.warn("No valid price history data found after filtering.");
+        return [];
+    }
+    // Determine candle period based on range
+    let candlePeriod = 60; // Default: 1 minute
     switch (range) {
-        case 1:
-            // default candle period
-            break;
         case 5:
             candlePeriod = 300; // 5 mins
             break;
         case 15:
-            candlePeriod = 1_800; // 30 mins
+            candlePeriod = 900; // 15 mins
             break;
         case 60:
-            candlePeriod = 3_600; // 1 hr
+            candlePeriod = 3600; // 1 hour
             break;
         case 120:
-            candlePeriod = 7_200; // 2 hrs
+            candlePeriod = 7200; // 2 hours
             break;
+        default:
+            candlePeriod = 60;
     }
-    // convert price feed to candle price data
-    let cdStart = Math.floor(priceHistory[0].ts / candlePeriod) * candlePeriod;
-    let cdEnd = Math.floor(priceHistory[priceHistory.length - 1].ts / candlePeriod) * candlePeriod;
+    // Align cdStart and cdEnd with the specified start and end range
+    let cdStart = Math.floor(start / candlePeriod) * candlePeriod;
+    let cdEnd = Math.floor(end / candlePeriod) * candlePeriod;
+    // Convert price history to candle data
     let cdFeeds = [];
     let pIndex = 0;
     for (let curCdStart = cdStart; curCdStart <= cdEnd; curCdStart += candlePeriod) {
+        if (pIndex >= priceHistory.length)
+            break;
         let st = priceHistory[pIndex].price;
         let hi = priceHistory[pIndex].price;
         let lo = priceHistory[pIndex].price;
@@ -63,12 +72,12 @@ async function fetchPriceChartData(pairIndex, start, end, range, token) {
             if (lo > priceHistory[pIndex].price)
                 lo = priceHistory[pIndex].price;
             en = priceHistory[pIndex].price;
-            // break new candle data starts
             if (priceHistory[pIndex].ts >= curCdStart + candlePeriod)
                 break;
             pIndex++;
         }
-        if (prevIndex !== pIndex)
+        // Only add the candle if data was processed
+        if (prevIndex !== pIndex) {
             cdFeeds.push({
                 open: st,
                 high: hi,
@@ -76,6 +85,7 @@ async function fetchPriceChartData(pairIndex, start, end, range, token) {
                 close: en,
                 time: curCdStart,
             });
+        }
     }
     return cdFeeds;
 }

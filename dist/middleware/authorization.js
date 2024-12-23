@@ -6,8 +6,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.auth = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const auth = (req, res, next) => {
-    // const { authorization } = req.headers;
-    // const token = authorization?.split(' ')[1];
     const authHeader = req.header('Authorization');
     const token = authHeader ? authHeader.replace('Bearer ', '') : null;
     if (!token) {

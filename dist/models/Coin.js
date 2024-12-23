@@ -11,13 +11,13 @@ const coinSchema = new mongoose_1.default.Schema({
     ticker: { type: String, required: true, },
     description: { type: String },
     token: { type: String, },
-    reserveOne: { type: Number, default: 1_000_000_000_000_000 },
-    reserveTwo: { type: Number, default: 30_000_000_000 },
+    reserveOne: { type: Number, default: 0 },
+    reserveTwo: { type: Number, default: 0 },
     url: { type: String, requried: true },
-    date: { type: Date, default: new Date },
-    telegram: { type: String },
     twitter: { type: String },
-    website: { type: String }
+    telegram: { type: String },
+    website: { type: String },
+    date: { type: Date, default: new Date }
 });
 const Coin = mongoose_1.default.model('Coin', coinSchema);
 exports.default = Coin;

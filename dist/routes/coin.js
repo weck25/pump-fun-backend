@@ -6,10 +6,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const joi_1 = __importDefault(require("joi"));
 const Coin_1 = __importDefault(require("../models/Coin"));
-const web3_1 = require("../program/web3");
 const CoinsStatus_1 = __importDefault(require("../models/CoinsStatus"));
 const Feedback_1 = __importDefault(require("../models/Feedback"));
+const VelasFunContractService_1 = require("../program/VelasFunContractService");
+const sockets_1 = require("../sockets");
+const coinStatus_1 = require("./coinStatus");
 const router = express_1.default.Router();
+const PINATA_GATEWAY_URL = process.env.PINATA_GATEWAY_URL;
 // @route   GET /coin/
 // @desc    Get all created coins
 // @access  Public
@@ -128,46 +131,147 @@ router.get('/:id', async (req, res) => {
 // @route   GET /coin/user/:userID
 // @desc    Get coins created by userID
 // @access  Public
-router.get('/user/:userID', (req, res) => {
+router.get('/user/:userID', async (req, res) => {
     const creator = req.params.userID;
-    Coin_1.default.find({ creator }).populate('creator').then(users => res.status(200).send(users)).catch(err => res.status(400).json('Nothing'));
+    const perPage = parseInt(req.query.perPage, 10) || 10;
+    const currentPage = parseInt(req.query.currentPage, 10) || 1;
+    try {
+        const skip = (currentPage - 1) * perPage;
+        const coins = await Coin_1.default.find({ creator })
+            .populate('creator')
+            .skip(skip)
+            .limit(perPage)
+            .lean();
+        const totalItems = await Coin_1.default.countDocuments({ creator });
+        const totalPages = Math.ceil(totalItems / perPage);
+        res.status(200).json({
+            pagination: {
+                totalItems,
+                totalPages,
+                currentPage: currentPage.toString(),
+                perPage: perPage.toString(),
+            },
+            coins
+        });
+    }
+    catch (err) {
+        console.error('Error fetching coins:', err);
+        res.status(400).json({ message: 'Nothing' });
+    }
 });
 // @route   POST /coin
 // @desc    Create coin
 // @access  Public
 router.post('/', async (req, res) => {
-    console.log("++++++++Create coin++++++++++", req.body.creator);
-    const { body } = req;
+    const { txHash, coin } = req.body;
+    const io = (0, sockets_1.getIo)();
+    if (!txHash) {
+        return res.status(400).json({ success: false, message: 'txHash is required' });
+    }
     const UserSchema = joi_1.default.object().keys({
         creator: joi_1.default.string().required(),
         name: joi_1.default.string().required(),
         ticker: joi_1.default.string().required(),
         description: joi_1.default.string(),
         url: joi_1.default.string().required(),
+        twitter: joi_1.default.allow('').optional(),
+        telegram: joi_1.default.allow('').optional(),
+        website: joi_1.default.allow('').optional(),
+        logo: joi_1.default.object().optional(),
+        reserveOne: joi_1.default.number().optional(),
+        reserveTwo: joi_1.default.number().optional(),
+        token: joi_1.default.allow('').optional()
     });
-    // console.log(req.user);
-    const inputValidation = UserSchema.validate(body);
-    // console.log(inputValidation)
+    const inputValidation = UserSchema.validate(coin);
     if (inputValidation.error) {
         return res.status(400).json({ error: inputValidation.error.details[0].message });
     }
-    // Create Token with UMI
-    const token = await (0, web3_1.createToken)({
-        name: req.body.name,
-        ticker: req.body.ticker,
-        url: req.body.url,
-        creator: req.body.creator,
-        description: req.body.description,
+    const { success, txResult } = await (0, VelasFunContractService_1.pollCreateEventFromVelas)(txHash);
+    if (!txResult || !success)
+        return res.status(404).json({ success: false, message: 'Transaction receipt not found' });
+    const oldCoin = await Coin_1.default.findOne({ token: txResult.tokenAddress });
+    if (oldCoin)
+        return res.status(404).json({ success: false, message: 'Coin already saved' });
+    const urlSeg = coin.url.split('/');
+    const url = `${PINATA_GATEWAY_URL}/${urlSeg[urlSeg.length - 1]}`;
+    const newCoin = new Coin_1.default({
+        creator: coin.creator,
+        name: coin.name,
+        ticker: coin.ticker,
+        description: coin.description,
+        token: txResult.tokenAddress,
+        twitter: coin.twitter,
+        telegram: coin.telegram,
+        website: coin.website,
+        url,
     });
-    console.log("token====", token);
-    if (token == "transaction failed")
-        res.status(400).json("fialed");
-    res.status(200).send(token);
-    // const name = body.name;
-    // const coinName = await Coin.findOne({ name })
-    // if (coinName) return res.status(400).json("Name is invalid")
-    // const coinData = await Coin.findOne({ token })
-    // if (coinData) return res.status(400).json("This coin is already created.")
+    const _newCoin = await newCoin.save();
+    const newCoinStatus = new CoinsStatus_1.default({
+        coinId: _newCoin._id,
+        record: [
+            {
+                holder: _newCoin.creator,
+                holdingStatus: 2,
+                amount: 0,
+                tx: txHash,
+                price: 300_000 / 1_072_892_901
+            }
+        ]
+    });
+    await newCoinStatus.save();
+    io.emit('TokenCreated', coin.name, txResult.creator);
+    res.status(200).send(_newCoin);
+});
+router.post('/buy-tokens', async (req, res) => {
+    try {
+        const { txHash } = req.body;
+        if (!txHash)
+            return res.status(400).json({ success: false, message: 'txHash is required' });
+        const { success, txResult } = await (0, VelasFunContractService_1.pollBuyTokenEventFromVelas)(txHash);
+        if (!txResult || !success)
+            return res.status(404).json({ success: false, message: 'Transaction receipt not found' });
+        const data = {
+            tx: txHash,
+            owner: txResult.buyer,
+            mint: txResult.tokenAddress,
+            swapType: 2,
+            swapAmount: txResult.amount,
+            reserve1: txResult.reserve0,
+            reserve2: txResult.reserve1,
+            price: txResult.price
+        };
+        await (0, coinStatus_1.setCoinStatus)(data);
+        return res.status(200).json({ success: true });
+    }
+    catch (error) {
+        console.log(error);
+        return res.status(404).json({ success: false });
+    }
+});
+router.post('/sell-tokens', async (req, res) => {
+    try {
+        const { txHash } = req.body;
+        if (!txHash)
+            return res.status(400).json({ success: false, message: 'txHash is required' });
+        const { success, txResult } = await (0, VelasFunContractService_1.pollSellTokenEventFromVelas)(txHash);
+        if (!txResult || !success)
+            return res.status(404).json({ success: false, message: 'Transaction receipt not found' });
+        const data = {
+            tx: txHash,
+            owner: txResult.seller,
+            mint: txResult.tokenAddress,
+            swapType: 1,
+            swapAmount: txResult.tokenSold,
+            reserve1: txResult.reserve0,
+            reserve2: txResult.reserve1,
+            price: txResult.price
+        };
+        await (0, coinStatus_1.setCoinStatus)(data);
+        return res.status(200).json({ success: true });
+    }
+    catch (error) {
+        return res.status(404).json({ success: false });
+    }
 });
 // @route   POST /coin/:coinId
 // @desc    Update coin

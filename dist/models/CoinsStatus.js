@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-// models/CoinStatus.js
+// models/CoinStatus.ts
 const mongoose_1 = __importDefault(require("mongoose"));
 const coinStatusSchema = new mongoose_1.default.Schema({
     coinId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: 'Coin', required: true },

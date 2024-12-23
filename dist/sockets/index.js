@@ -1,25 +1,29 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.getIo = void 0;
 const socket_io_1 = require("socket.io");
 const logger_1 = require("./logger");
 // import { connectRedis } from './redis';
+let io;
 const socketio = async (server) => {
     try {
         // Socket communication
-        const io = new socket_io_1.Server(server, {
+        io = new socket_io_1.Server(server, {
             cors: {
                 origin: '*',
                 methods: ['GET', 'POST'],
             },
         });
-        io.close(() => {
-            console.log('Server and all connected sockets closed');
-        });
+        // Listen for new socket connections
         io.on('connection', async (socket) => {
             const id = socket.user?.user?.id;
             console.log(`socket (${socket.id}) -> ${id}`);
+            // Here you can add more socket events or other logic for the connection
+            socket.on('transaction', (data) => {
+                io.emit('transaction', data);
+            });
         });
-        // await connectRedis(io);
+        // await connectRedis(io); // If you are using Redis, uncomment this
         logger_1.logger.info('  Socket server is running');
     }
     catch (err) {
@@ -28,3 +32,5 @@ const socketio = async (server) => {
     }
 };
 exports.default = socketio;
+const getIo = () => io;
+exports.getIo = getIo;

@@ -3,25 +3,25 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-// routes/users.js
+// routes/users.ts
 const express_1 = __importDefault(require("express"));
 const User_1 = __importDefault(require("../models/User"));
 const PendingUser_1 = __importDefault(require("../models/PendingUser"));
 const crypto_1 = __importDefault(require("crypto"));
 const joi_1 = __importDefault(require("joi"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+const PINATA_GATEWAY_URL = process.env.PINATA_GATEWAY_URL;
 const router = express_1.default.Router();
 // @route   POST api/users
 // @desc    Resgister user
 // @access  Public
 router.post('/', async (req, res) => {
-    console.log("wallet connect");
-    // Validate form
     const { body } = req;
     const UserSchema = joi_1.default.object().keys({
         name: joi_1.default.string().required(),
         wallet: joi_1.default.string().required(),
         isLedger: joi_1.default.boolean().optional().required(),
+        bio: joi_1.default.allow('')
     });
     const inputValidation = UserSchema.validate(body);
     if (inputValidation.error) {
@@ -29,24 +29,17 @@ router.post('/', async (req, res) => {
     }
     const wallet = body.wallet;
     const userData = await User_1.default.findOne({ wallet });
-    console.log("userdata:", userData);
-    console.log(!userData == false);
-    if (!userData == false)
-        return res.status(200).send(userData);
+    if (!userData == false) {
+        const token = jsonwebtoken_1.default.sign({ id: userData._id, name: userData.name, wallet }, 'secret', { algorithm: 'HS256', expiresIn: '60m' });
+        return res.status(200).json({ user: userData, token });
+    }
     const exisitingPendingUser = await PendingUser_1.default.findOne({ wallet });
-    console.log("pending:", exisitingPendingUser);
     if (exisitingPendingUser == null) {
         const nonce = crypto_1.default.randomBytes(8).toString('hex');
         const newPendingUser = new PendingUser_1.default({ name: body.name, wallet, nonce, isLedger: body.isLedger });
         const user = await newPendingUser.save();
-        // .then((user) => {
-        //     console.log("Saved user::", user);
-        res.status(200).send(user);
-        // })
-        // .catch((error) => {
-        //     console.error("Error saving user::", error);
-        //     res.status(500).json({ message: "Failed to save user", error });
-        // });
+        const token = jsonwebtoken_1.default.sign({ id: user._id, name: user.name, wallet }, 'secret', { algorithm: 'HS256', expiresIn: '60m' });
+        res.status(200).json({ user, token });
     }
     else {
         res.status(400).json({ message: "A user with this wallet already requested." });
@@ -57,7 +50,6 @@ router.post('/', async (req, res) => {
 // @access  Public
 router.post('/login', async (req, res) => {
     try {
-        console.log(req.body);
         const { wallet } = req.body;
         const user = await User_1.default.findOne({ wallet });
         if (!user) {
@@ -171,6 +163,20 @@ router.get('/:id', async (req, res) => {
     }
     catch (error) {
         res.status(500).send(error);
+    }
+});
+router.post('/update/:id', async (req, res) => {
+    try {
+        const { username, bio, url } = req.body;
+        const urlSeg = url.split('/');
+        const _url = `${PINATA_GATEWAY_URL}/${urlSeg[urlSeg.length - 1]}`;
+        const { id } = req.params;
+        const user = await User_1.default.findByIdAndUpdate(id, { name: username, bio, avatar: _url }, { new: true });
+        return res.status(200).json(user);
+    }
+    catch (error) {
+        console.error(error);
+        return res.status(500).json('Server Error');
     }
 });
 exports.default = router;
