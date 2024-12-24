@@ -241,6 +241,9 @@ router.post('/', async (req, res) => {
         url,
     });
     const _newCoin = await newCoin.save();
+
+    const { amount, price } = txResult;
+    console.log("amout: ", amount, price)
     const newCoinStatus = new CoinStatus({
         coinId: _newCoin._id,
         record: [
@@ -249,7 +252,14 @@ router.post('/', async (req, res) => {
                 holdingStatus: 2,
                 amount: 0,
                 tx: txHash,
-                price: 300_000 / 1_072_892_901
+                price: 300_000 / 1_473_459_215
+            },
+            {
+                holder: _newCoin.creator,
+                holdingStatus: 2,
+                amount: Number(amount),
+                tx: txHash,
+                price: Number(price) / 1_000_000_000_000
             }
         ]
     })

@@ -19,8 +19,9 @@ export const setCoinStatus = async (data: ResultType) => {
     }
 
     const coinStatus = await CoinStatus.findOne({ coinId: coin?._id })
-    io.emit(`price-update-${coin?.name}`, { price: newTx.price })
-    io.emit('transaction', { isBuy: data.swapType, user: user, token: coin, amount: newTx.amount, ticker: coin?.ticker, tx: data.tx, price: newTx.price })
+    io.emit(`price-update-${coin?.name}`, { price: newTx.price, lastTime: coinStatus?.record[coinStatus.record.length - 1].time })
+    io.emit('transaction', { isBuy: data.swapType, user: user, token: coin, amount: newTx.amount, ticker: coin?.ticker, tx: data.tx, price: newTx.price });
+    console.log(coinStatus?.record[coinStatus.record.length - 1].time)
     coinStatus?.record.push(newTx);
     coinStatus?.save()
     console.log("Update coin when buy or sell", data)
