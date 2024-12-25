@@ -243,7 +243,6 @@ router.post('/', async (req, res) => {
     const _newCoin = await newCoin.save();
 
     const { amount, price } = txResult;
-    console.log("amout: ", amount, price);
     const record = [
         {
             holder: _newCoin.creator,
@@ -253,7 +252,7 @@ router.post('/', async (req, res) => {
             price: Math.floor(300_000 * 1_000_000_000_000 / 1_473_459_215) / 1_000_000_000_000
         },
     ]
-    if (amount !== '0n') record.push({
+    if (BigInt(amount) !== 0n) record.push({
         holder: _newCoin.creator,
         holdingStatus: 2,
         amount: Number(amount),
@@ -266,7 +265,7 @@ router.post('/', async (req, res) => {
         record: record
     })
     await newCoinStatus.save();
-    io.emit('TokenCreated', coin.name, txResult.creator);
+    io.emit('TokenCreated', _newCoin.ticker, txResult.creator);
 
     res.status(200).send(_newCoin);
 })
