@@ -243,25 +243,27 @@ router.post('/', async (req, res) => {
     const _newCoin = await newCoin.save();
 
     const { amount, price } = txResult;
-    console.log("amout: ", amount, price)
+    console.log("amout: ", amount, price);
+    const record = [
+        {
+            holder: _newCoin.creator,
+            holdingStatus: 2,
+            amount: 0,
+            tx: txHash,
+            price: Math.floor(300_000 * 1_000_000_000_000 / 1_473_459_215) / 1_000_000_000_000
+        },
+    ]
+    if (amount !== '0n') record.push({
+        holder: _newCoin.creator,
+        holdingStatus: 2,
+        amount: Number(amount),
+        tx: txHash,
+        price: Number(price) / 1_000_000_000_000
+    })
+
     const newCoinStatus = new CoinStatus({
         coinId: _newCoin._id,
-        record: [
-            {
-                holder: _newCoin.creator,
-                holdingStatus: 2,
-                amount: 0,
-                tx: txHash,
-                price: 300_000 / 1_473_459_215
-            },
-            {
-                holder: _newCoin.creator,
-                holdingStatus: 2,
-                amount: Number(amount),
-                tx: txHash,
-                price: Number(price) / 1_000_000_000_000
-            }
-        ]
+        record: record
     })
     await newCoinStatus.save();
     io.emit('TokenCreated', coin.name, txResult.creator);
