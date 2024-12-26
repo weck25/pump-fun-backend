@@ -493,62 +493,36 @@ router.get('/get-weekly-transaction', async (req, res) => {
 
 router.get('/get-top-5-coins', async (req, res) => {
     try {
-        const topCoins = await CoinStatus.aggregate([
-            // Unwind the records to handle individual transactions
-            { $unwind: '$record' },
+        const topCoins = await Coin.find().sort('-reserveTwo').limit(5);
 
-            // Group by coinId and calculate the necessary data
-            {
-                $group: {
-                    _id: '$coinId',
-                    totalReserveTwo: { $sum: '$record.amount' },  // Summing the reserveTwo (amount)
-                    holders: { $addToSet: '$record.holder' },     // Counting unique holders
-                    transactionCount: { $sum: 1 },                 // Counting the number of transactions (records)
-                    price: { $first: '$record.price' }             // Taking the price from the first record (assuming price doesn't change for simplicity)
-                }
-            },
+        const result = await Promise.all(
+            topCoins.map(async (coin) => {
+                const coinStatus = await CoinStatus.findOne({ coinId: coin._id });
 
-            // Project the results to get the desired format
-            {
-                $project: {
-                    coinId: '$_id',
-                    totalReserveTwo: 1,
-                    holderCount: { $size: '$holders' },  // Count the number of unique holders
-                    transactionCount: 1,
-                    price: 1,
-                    _id: 0
-                }
-            },
+                const holders = coinStatus?.record.map(tx => tx.holder) || [];
+                const uniqueHolders = new Set(holders).size;
 
-            // Sort the coins by totalReserveTwo in descending order
-            { $sort: { totalReserveTwo: -1 } },
+                const price = coin.reserveOne
+                    ? coin.reserveTwo / coin.reserveOne / 1_000_000_000_000
+                    : Math.floor((300_000 * 1_000_000_000_000) / 1_473_459_215) / 1_000_000_000_000;
 
-            // Limit to the top 5 coins
-            { $limit: 5 }
-        ]);
+                return {
+                    name: coin.ticker,
+                    image: coin.url,
+                    marketcap: price * 1_000_000_000,
+                    holders: uniqueHolders,
+                    transactions: coinStatus?.record.length || 0,
+                    price,
+                };
+            })
+        );
 
-        // Fetch coin details for the top 5 coins
-        const coinDetails = await Coin.find({ '_id': { $in: topCoins.map(coin => coin.coinId) } });
-
-        // Merge coin details with aggregated data
-        const result = topCoins.map(coin => {
-            const coinDetail = coinDetails.find(c => c._id.toString() === coin.coinId.toString());
-            const price = coinDetail?.reserveOne ? coinDetail.reserveTwo / coinDetail.reserveOne / 1_000_000_000_000 : Math.floor(300_000 * 1_000_000_000_000 / 1_473_459_215) / 1_000_000_000_000
-            return {
-                name: coinDetail?.ticker,
-                image: coinDetail?.url,
-                marketcap: price * 1_000_000_000,
-                holders: coin.holderCount,
-                transactions: coin.transactionCount,
-                price
-            };
-        });
-
-        return res.status(200).json(result)
+        return res.status(200).json(result);
     } catch (error) {
-        console.log(error);
-        return res.status(500).json({ error })
+        console.error(error);
+        return res.status(500).json({ error: 'An error occurred while fetching top coins' });
     }
-})
+});
+
 
 export default router;
