@@ -11,7 +11,7 @@ const adminDataSchema = new mongoose.Schema(
         velasFunReward: { type: Number, default: 100 },
         siteKill: { type: Boolean, default: false },
         logoTitle: { type: String, default: 'Velas' },
-        logoUrl: { type: String, default: 'uploads/create-token-bg.png' },
+        logoUrl: { type: String, default: '' },
         facebook: { type: String, default: '' },
         twitter: { type: String, default: '' },
         youtube: { type: String, default: '' },

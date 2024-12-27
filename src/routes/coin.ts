@@ -120,7 +120,17 @@ router.get('/', async (req, res) => {
 
         return res.status(200).send({
             success: true,
-            coins,
+            coins: await Promise.all(coins.map(async coin => {
+                const coinStatus = await CoinStatus.findOne({ coinId: coin._id });
+                const lastPrice = coinStatus?.record
+                    ? coinStatus.record[coinStatus.record.length - 1].price
+                    : Math.floor(300_000 * 1_000_000_000_000 / 1_473_459_215) / 1_000_000_000_000;
+
+                return {
+                    ...coin,
+                    price: lastPrice
+                };
+            })),
             pagination: {
                 currentPage: Number(currentPage),
                 perPage: Number(perPage),
