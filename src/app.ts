@@ -13,6 +13,7 @@ import socketio from './sockets/';
 import { logger } from './sockets/logger';
 import { init } from './db/dbConncetion';
 import { createServer } from 'http';
+import path from 'path';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -32,10 +33,10 @@ app.use('/api/feedback/', messageRoutes);
 app.use('/api/cointrade/', coinTradeRoutes)
 app.use('/api/chart/', chartRoutes)
 app.use('/api/follow/', followRoutes);
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 const startServer = async () => {
   try {
-    // Initialize the database
     await init();
 
     const server = createServer(app);

@@ -2,8 +2,24 @@ import express from "express";
 import User from "../models/User";
 import Coin from "../models/Coin";
 import CoinStatus from "../models/CoinsStatus";
+import AdminData from "../models/AdminData";
+import { adminAuth } from "../middleware/authorization";
+import multer from 'multer';
+import path from "path";
+import fs from 'fs';
+import FAQ from "../models/FAQ";
 
 const router = express.Router();
+
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, 'src/uploads/');
+    },
+    filename: (req, file, cb) => {
+        cb(null, Date.now() + '-' + file.originalname);
+    }
+});
+const upload = multer({ storage });
 
 const getCoinOverview = async () => {
     const now = new Date();
@@ -455,7 +471,18 @@ const getBuyAndSellCountByDay = async (isCurrentWeek: boolean) => {
     return weeklyData;
 };
 
-router.get('/overview', async (req, res) => {
+const deleteFile = (filePath: string) => {
+    const fullFilePath = path.join(__dirname, '..', filePath);
+    fs.unlink(fullFilePath, (err) => {
+        if (err) {
+            console.error(`Error deleting file ${fullFilePath}:`, err);
+        } else {
+            console.log(`File deleted successfully: ${fullFilePath}`);
+        }
+    });
+};
+
+router.get('/overview', adminAuth, async (req, res) => {
     try {
         const coin = await getCoinOverview();
         const balance = await getBalanceOverview();
@@ -469,7 +496,7 @@ router.get('/overview', async (req, res) => {
     }
 })
 
-router.get('/get-balance-token', async (req, res) => {
+router.get('/get-balance-token', adminAuth, async (req, res) => {
     try {
         const option = req.query.option || 'day';
         const data = await getBalanceAndTokenAmount(option as string);
@@ -480,7 +507,7 @@ router.get('/get-balance-token', async (req, res) => {
     }
 })
 
-router.get('/get-weekly-transaction', async (req, res) => {
+router.get('/get-weekly-transaction', adminAuth, async (req, res) => {
     try {
         const option = req.query.option || 'current';
         const result = await getBuyAndSellCountByDay(option === 'current');
@@ -491,7 +518,7 @@ router.get('/get-weekly-transaction', async (req, res) => {
     }
 })
 
-router.get('/get-top-5-coins', async (req, res) => {
+router.get('/get-top-5-coins', adminAuth, async (req, res) => {
     try {
         const topCoins = await Coin.find().sort('-reserveTwo').limit(5);
 
@@ -504,9 +531,10 @@ router.get('/get-top-5-coins', async (req, res) => {
 
                 const price = coin.reserveOne
                     ? coin.reserveTwo / coin.reserveOne / 1_000_000_000_000
-                    : Math.floor((300_000 * 1_000_000_000_000) / 1_473_459_215) / 1_000_000_000_000;
+                    : Math.floor((300_000 * 1_000_000_000_000) / 1_473_459_215) / 1_000_000_000_000_000_000_000_000;
 
                 return {
+                    id: coin.id,
                     name: coin.ticker,
                     image: coin.url,
                     marketcap: price * 1_000_000_000,
@@ -519,10 +547,132 @@ router.get('/get-top-5-coins', async (req, res) => {
 
         return res.status(200).json(result);
     } catch (error) {
-        console.error(error);
+        console.log(error);
         return res.status(500).json({ error: 'An error occurred while fetching top coins' });
     }
 });
 
+router.get('/get-admin-data', adminAuth, async (req, res) => {
+    try {
+        const adminData = await AdminData.findOne();
+        return res.status(200).json(adminData);
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({ error: 'An error occurred while fetching top coins' });
+    }
+})
+
+router.post('/update', adminAuth, async (req, res) => {
+    try {
+        const data = req.body;
+        const adminData = await AdminData.findOneAndUpdate({}, data, { new: true });
+        return res.status(200).json(adminData);
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json(error)
+    }
+})
+
+router.post('/update-logo-info', adminAuth, upload.single('logoUrl'), async (req, res) => {
+    try {
+        const { logoTitle, logoRemoved } = req.body;
+        const updatedLogoInfo: { logoTitle: string, logoUrl?: string } = { logoTitle }
+
+        if (req.file) {
+            updatedLogoInfo.logoUrl = `uploads/${req.file.filename}`;
+        }
+
+        if (logoRemoved) updatedLogoInfo.logoUrl = '';
+
+        const adminData = await AdminData.findOne();
+        if ((updatedLogoInfo.logoUrl || logoRemoved) && adminData?.logoUrl) deleteFile(adminData?.logoUrl);
+
+        const adminData_ = await AdminData.findOneAndUpdate({}, updatedLogoInfo, { new: true });
+
+        res.status(200).json(adminData_)
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json(error);
+    }
+})
+
+router.post('/update-banner-info', adminAuth, upload.single('bannerUrl'), async (req, res) => {
+    try {
+        const { bannerTitle, bannerContent, bannerRemoved } = req.body;
+        const updatedbannerInfo: { bannerTitle: string, bannerContent: string, bannerUrl?: string } = { bannerTitle, bannerContent }
+
+        if (req.file) {
+            updatedbannerInfo.bannerUrl = `uploads/${req.file.filename}`;
+        }
+
+        if (bannerRemoved) updatedbannerInfo.bannerUrl = '';
+
+        const adminData = await AdminData.findOne();
+        if ((updatedbannerInfo.bannerUrl || bannerRemoved) && adminData?.bannerUrl) deleteFile(adminData?.bannerUrl);
+
+        const adminData_ = await AdminData.findOneAndUpdate({}, updatedbannerInfo, { new: true });
+
+        res.status(200).json(adminData_)
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json(error);
+    }
+})
+
+router.get('/get-metadata', async (req, res) => {
+    try {
+        const adminData = await AdminData.findOne({}, 'logoTitle logoUrl bannerTitle bannerContent bannerUrl footerContent facebook twitter youtube linkedin policy terms siteKill');
+        return res.status(200).json(adminData)
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json(error);
+    }
+
+})
+
+router.get('/faqs', async (req, res) => {
+    try {
+        const faqs = await FAQ.find();
+        return res.status(200).json(faqs)
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json(error);
+    }
+})
+
+router.post('/faqs', adminAuth, async (req, res) => {
+    try {
+        const { question, answer } = req.body;
+        const newFaq = new FAQ({ question, answer });
+        await newFaq.save();
+        return res.status(201).json(newFaq)
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json(error);
+    }
+})
+
+router.put('/faqs/:id', adminAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { question, answer } = req.body;
+        const updatedFaq = await FAQ.findByIdAndUpdate(id, { question, answer }, { new: true });
+        return res.status(200).json(updatedFaq);
+    } catch (error) {
+        console.log(error)
+        return res.status(500).json(error);
+    }
+})
+
+router.delete('/faqs/:id', async (req, res) => {
+    try {
+        const {id} = req.params;
+        await FAQ.findByIdAndDelete(id);
+        return res.status(204).send();
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json(error);
+    }
+})
 
 export default router;

@@ -5,6 +5,7 @@ import PendingUser from '../models/PendingUser';
 import crypto from 'crypto'
 import Joi from 'joi';
 import jwt from 'jsonwebtoken';
+import AdminData from '../models/AdminData';
 
 const PINATA_GATEWAY_URL = process.env.PINATA_GATEWAY_URL;
 
@@ -28,8 +29,10 @@ router.post('/', async (req, res) => {
     const wallet = body.wallet;
     const userData = await User.findOne({ wallet });
     if (!userData == false) {
-        const token = jwt.sign({ id: userData._id, name: userData.name, wallet }, 'secret', { algorithm: 'HS256', expiresIn: '60m' });
-        return res.status(200).json({user: userData, token});
+        const admins = (await AdminData.findOne())?.admin;
+        const isAdmin = admins ? admins.includes(userData.wallet) : false;
+        const token = jwt.sign({ id: userData._id, name: userData.name, wallet, isAdmin }, 'secret', { algorithm: 'HS256', expiresIn: '60m' });
+        return res.status(200).json({ user: { ...userData.toJSON(), admin: isAdmin }, token });
     }
 
     const exisitingPendingUser = await PendingUser.findOne({ wallet })
@@ -38,7 +41,7 @@ router.post('/', async (req, res) => {
         const newPendingUser = new PendingUser({ name: body.name, wallet, nonce, isLedger: body.isLedger });
         const user = await newPendingUser.save();
         const token = jwt.sign({ id: user._id, name: user.name, wallet }, 'secret', { algorithm: 'HS256', expiresIn: '60m' });
-        res.status(200).json({user, token});
+        res.status(200).json({ user, token });
     } else {
         res.status(400).json({ message: "A user with this wallet already requested." });
     }
@@ -83,7 +86,6 @@ router.post('/confirm', async (req, res) => {
         signature: req.body.signature,
         nonce: req.body.nonce,
     }
-    console.log("body", body)
     // Validate form
     const UserSchema = Joi.object().keys({
         name: Joi.string().required(),
@@ -93,11 +95,9 @@ router.post('/confirm', async (req, res) => {
         isLedger: Joi.boolean().optional().required(),
     })
     const inputValidation = UserSchema.validate(body);
-    console.log(inputValidation)
     if (inputValidation.error) {
         return res.status(400).json({ error: inputValidation.error.details[0].message })
     }
-    console.log("validation OK")
     // const foundUser = await User.findOne({wallet : body.wallet})
     // if(!foundUser == null ) return res.status(400).json("First of all, You have to register User")
     const foundNonce = await PendingUser.findOneAndDelete({ nonce: body.nonce }).exec();
@@ -195,7 +195,7 @@ export default router;
 export interface UserInfo {
     name: string,
     wallet: string,
-    avatar?: string
+    avatar?: string,
 }
 
 export interface PendingUserInfo {

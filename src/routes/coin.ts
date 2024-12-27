@@ -14,6 +14,7 @@ import {
 } from "../program/VelasFunContractService";
 import { getIo } from "../sockets";
 import { setCoinStatus } from "./coinStatus";
+import User from "../models/User";
 
 const router = express.Router();
 const PINATA_GATEWAY_URL = process.env.PINATA_GATEWAY_URL;
@@ -265,7 +266,8 @@ router.post('/', async (req, res) => {
         record: record
     })
     await newCoinStatus.save();
-    io.emit('TokenCreated', _newCoin.ticker, txResult.creator);
+    const user = await User.findOne({ wallet: txResult.creator });
+    io.emit('TokenCreated', { coin: _newCoin, user });
 
     res.status(200).send(_newCoin);
 })

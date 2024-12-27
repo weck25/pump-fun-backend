@@ -14,7 +14,7 @@ const coinSchema = new mongoose.Schema(
         twitter: { type: String },
         telegram: { type: String },
         website: { type: String },
-        date: { type: Date, default: new Date }
+        date: { type: Date, default: () => new Date() }
     },
     { timestamps: true }
 );
