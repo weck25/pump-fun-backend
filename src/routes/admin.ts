@@ -526,8 +526,10 @@ router.get('/get-top-5-coins', adminAuth, async (req, res) => {
             topCoins.map(async (coin) => {
                 const coinStatus = await CoinStatus.findOne({ coinId: coin._id });
 
-                const holders = coinStatus?.record.map(tx => tx.holder) || [];
+                const holders = coinStatus?.record.map(tx => tx.holder.toString()) || [];
+                console.log(holders)
                 const uniqueHolders = new Set(holders).size;
+                console.log(uniqueHolders)
 
                 const price = coin.reserveOne
                     ? coin.reserveTwo / coin.reserveOne / 1_000_000_000_000
