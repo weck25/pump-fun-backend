@@ -13,7 +13,7 @@ const router = express.Router();
 
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, 'src/uploads/');
+        cb(null, 'uploads/');
     },
     filename: (req, file, cb) => {
         cb(null, Date.now() + '-' + file.originalname);
@@ -472,7 +472,7 @@ const getBuyAndSellCountByDay = async (isCurrentWeek: boolean) => {
 };
 
 const deleteFile = (filePath: string) => {
-    const fullFilePath = path.join(__dirname, '..', filePath);
+    const fullFilePath = path.join(__dirname, '..', '..', filePath);
     fs.unlink(fullFilePath, (err) => {
         if (err) {
             console.error(`Error deleting file ${fullFilePath}:`, err);

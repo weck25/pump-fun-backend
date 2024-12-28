@@ -33,7 +33,7 @@ app.use('/api/feedback/', messageRoutes);
 app.use('/api/cointrade/', coinTradeRoutes)
 app.use('/api/chart/', chartRoutes)
 app.use('/api/follow/', followRoutes);
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 const startServer = async () => {
   try {
