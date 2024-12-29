@@ -10,7 +10,8 @@ const coinStatusSchema = new mongoose.Schema(
             time: { type: Date, default: Date.now },
             amount: { type: Number, default: 0 },
             price: { type: Number, required: true },
-            tx: { type: String, required: true }
+            tx: { type: String, required: true },
+            feePercent: { type: Number, required: true }
         }]
     },
     { timestamps: true }

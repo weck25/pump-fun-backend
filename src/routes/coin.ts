@@ -15,6 +15,7 @@ import {
 import { getIo } from "../sockets";
 import { setCoinStatus } from "./coinStatus";
 import User from "../models/User";
+import AdminData from "../models/AdminData";
 
 const router = express.Router();
 const PINATA_GATEWAY_URL = process.env.PINATA_GATEWAY_URL;
@@ -254,21 +255,27 @@ router.post('/', async (req, res) => {
     const _newCoin = await newCoin.save();
 
     const { amount, price } = txResult;
+
+    const adminData = await AdminData.findOne();
+
     const record = [
         {
             holder: _newCoin.creator,
             holdingStatus: 2,
             amount: 0,
             tx: txHash,
-            price: Math.floor(300_000 * 1_000_000_000_000 / 1_473_459_215) / 1_000_000_000_000
+            price: Math.floor(300_000 * 1_000_000_000_000 / 1_473_459_215) / 1_000_000_000_000,
+            feePercent: adminData?.feePercent
         },
     ]
+    
     if (BigInt(amount) !== 0n) record.push({
         holder: _newCoin.creator,
         holdingStatus: 2,
         amount: Number(amount),
         tx: txHash,
-        price: Number(price) / 1_000_000_000_000
+        price: Number(price) / 1_000_000_000_000,
+        feePercent: adminData?.feePercent
     })
 
     const newCoinStatus = new CoinStatus({

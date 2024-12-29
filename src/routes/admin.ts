@@ -85,7 +85,12 @@ const getBalanceOverview = async () => {
                         }
                     }
                 },
-                amount: '$record.amount',
+                amount: {
+                    $divide: [
+                        { $multiply: ['$record.amount', '$record.feePercent'] },
+                        100
+                    ]
+                },
                 holdingStatus: '$record.holdingStatus',
                 tokenPrice: '$record.price',
             }
@@ -109,7 +114,12 @@ const getBalanceOverview = async () => {
                                         { $eq: ['$holdingStatus', 1] },
                                         {
                                             $divide: [
-                                                { $multiply: ['$amount', '$tokenPrice'] },
+                                                { $multiply: [{
+                    $divide: [
+                        { $multiply: ['$record.amount', '$record.feePercent'] },
+                        100
+                    ]
+                }, '$tokenPrice'] },
                                                 1000000
                                             ]
                                         },
@@ -127,7 +137,12 @@ const getBalanceOverview = async () => {
                             _id: null,
                             totalBuyAmount: {
                                 $sum: {
-                                    $cond: [{ $eq: ['$holdingStatus', 2] }, '$amount', 0]
+                                    $cond: [{ $eq: ['$holdingStatus', 2] }, {
+                                        $divide: [
+                                            { $multiply: ['$amount', '$feePercent'] },
+                                            100
+                                        ]
+                                    }, 0]
                                 }
                             },
                             totalSellAmount: {
@@ -315,7 +330,12 @@ const getBalanceAndTokenAmount = async (option: string) => {
                     }
                 },
                 holdingStatus: '$record.holdingStatus',
-                amount: '$record.amount',
+                amount: {
+                    $divide: [
+                        { $multiply: ['$record.amount', '$record.feePercent'] },
+                        100
+                    ]
+                },
                 tokenPrice: '$record.price'
             }
         },
@@ -324,7 +344,12 @@ const getBalanceAndTokenAmount = async (option: string) => {
                 _id: '$time',
                 totalBuyAmount: {
                     $sum: {
-                        $cond: [{ $eq: ['$holdingStatus', 2] }, '$amount', 0]
+                        $cond: [{ $eq: ['$holdingStatus', 2] }, {
+                            $divide: [
+                                { $multiply: ['$amount', '$feePercent'] },
+                                100
+                            ]
+                        }, 0]
                     }
                 },
                 totalSellAmount: {
@@ -668,7 +693,7 @@ router.put('/faqs/:id', adminAuth, async (req, res) => {
 
 router.delete('/faqs/:id', async (req, res) => {
     try {
-        const {id} = req.params;
+        const { id } = req.params;
         await FAQ.findByIdAndDelete(id);
         return res.status(204).send();
     } catch (error) {
