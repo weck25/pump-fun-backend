@@ -172,7 +172,7 @@ async function handleTokenCreatedEvent(decodedLog: any, txHash: string) {
         if (BigInt(amount) !== 0n) record.push({
             holder: _newCoin.creator,
             holdingStatus: 2,
-            amount: Number(amount),
+            amount: Number(amount) / 1_000_000_000_000_000_000,
             tx: txHash,
             price: Number(price) / 1_000_000_000_000,
             feePercent: adminData?.feePercent
