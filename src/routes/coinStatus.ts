@@ -32,7 +32,7 @@ export const setCoinStatus = async (data: ResultType) => {
             closedPrice: coinStatus?.record[coinStatus.record.length - 1].price 
         })
     }
-    io.emit('update-bonding-curve', { tokenId: coin?._id, price: Number(data.price) });
+    io.emit('update-bonding-curve', { tokenId: coin?._id, price: Number(data.price) / 1_000_000_000_000 });
     io.emit('transaction', { 
         isBuy: data.swapType, 
         user: user, 
@@ -40,7 +40,7 @@ export const setCoinStatus = async (data: ResultType) => {
         amount: data.swapType === 2 ? (Number(data.swapAmount) / 1_000_000_000_000_000_000).toString() : Number(data.swapAmount).toString(), 
         ticker: coin?.ticker, 
         tx: data.tx, 
-        price: data.price.toString(),
+        price: (Number(data.price) / 1_000_000_000_000).toString(),
     });
     // console.log("updated coin", updateCoin);
 }
