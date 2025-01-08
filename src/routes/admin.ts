@@ -558,7 +558,7 @@ router.get('/get-top-5-coins', adminAuth, async (req, res) => {
 
                 const price = coin.reserveOne
                     ? coin.reserveTwo / coin.reserveOne / 1_000_000_000_000
-                    : Math.floor((300_000 * 1_000_000_000_000) / 1_473_459_215) / 1_000_000_000_000_000_000_000_000;
+                    : Math.floor((300_000 * 1_000_000_000_000) / 1_087_598_453) / 1_000_000_000_000_000_000_000_000;
 
                 return {
                     id: coin.id,

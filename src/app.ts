@@ -11,9 +11,10 @@ import chartRoutes from './routes/chart';
 import followRoutes from './routes/follow';
 import socketio from './sockets/';
 import { logger } from './sockets/logger';
-import { init } from './db/dbConncetion';
+import { init } from './db/dbConnection';
 import { createServer } from 'http';
 import path from 'path';
+import { subscribeToLogs } from './program/VelasFunContractService';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -38,10 +39,10 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 const startServer = async () => {
   try {
     await init();
-
     const server = createServer(app);
     socketio(server);
-
+    await subscribeToLogs()
+    
     server.listen(PORT, () => {
       logger.info('App is running at http://localhost:%d in %s mode', PORT, app.get('env'));
     });

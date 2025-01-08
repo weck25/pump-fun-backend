@@ -14,6 +14,9 @@ const coinSchema = new mongoose.Schema(
         twitter: { type: String },
         telegram: { type: String },
         website: { type: String },
+        tradingOnUniswap: { type: Boolean, default: false },
+        tradingPaused: { type: Boolean, default: false },
+        uniswapPair: { type: String, default: '' },
         date: { type: Date, default: () => new Date() }
     },
     { timestamps: true }

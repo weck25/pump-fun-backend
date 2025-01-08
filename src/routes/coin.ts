@@ -1,24 +1,10 @@
 import express from "express";
-import Joi from "joi";
 import Coin from "../models/Coin";
 import CoinStatus from "../models/CoinsStatus";
 import Message from "../models/Feedback";
-import {
-    BuyTokenTxResult,
-    CreateTokenTxResult,
-    pollBuyTokenEventFromVelas,
-    pollCreateEventFromVelas,
-    pollSellTokenEventFromVelas,
-    ResultType,
-    SellTokenTxResult
-} from "../program/VelasFunContractService";
-import { getIo } from "../sockets";
-import { setCoinStatus } from "./coinStatus";
-import User from "../models/User";
 import AdminData from "../models/AdminData";
 
 const router = express.Router();
-const PINATA_GATEWAY_URL = process.env.PINATA_GATEWAY_URL;
 
 // @route   GET /coin/
 // @desc    Get all created coins
@@ -151,12 +137,14 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
     try {
         const id = req.params.id;
+        const adminData = await AdminData.findOne();
         const coin = await Coin.findOne({ _id: id }).populate('creator').lean();
         const coinStatus = await CoinStatus.findOne({ coinId: id });
         const lastPrice = coinStatus?.record ? coinStatus.record[coinStatus?.record.length - 1].price : 0.00003;
         const coinWithPrice = {
             ...coin,
-            price: lastPrice
+            price: lastPrice,
+            graduationMarketCap: adminData?.graduationMarketCap || 5
         }
         return res.status(200).json(coinWithPrice);
     } catch (error) {
@@ -199,146 +187,6 @@ router.get('/user/:userID', async (req, res) => {
         res.status(400).json({ message: 'Nothing' });
     }
 });
-
-// @route   POST /coin
-// @desc    Create coin
-// @access  Public
-router.post('/', async (req, res) => {
-    const { txHash, coin } = req.body;
-    const io = getIo();
-
-    if (!txHash) {
-        return res.status(400).json({ success: false, message: 'txHash is required' });
-    }
-
-    const UserSchema = Joi.object().keys({
-        creator: Joi.string().required(),
-        name: Joi.string().required(),
-        ticker: Joi.string().required(),
-        description: Joi.string(),
-        url: Joi.string().required(),
-        twitter: Joi.allow('').optional(),
-        telegram: Joi.allow('').optional(),
-        website: Joi.allow('').optional(),
-        logo: Joi.object().optional(),
-        reserveOne: Joi.number().optional(),
-        reserveTwo: Joi.number().optional(),
-        token: Joi.allow('').optional()
-    });
-
-    const inputValidation = UserSchema.validate(coin);
-    if (inputValidation.error) {
-        return res.status(400).json({ error: inputValidation.error.details[0].message })
-    }
-
-    const { success, txResult }: { success: boolean, txResult: CreateTokenTxResult | null } = await pollCreateEventFromVelas(txHash);
-    if (!txResult || !success) return res.status(404).json({ success: false, message: 'Transaction receipt not found' });
-
-    const oldCoin = await Coin.findOne({ token: (txResult as CreateTokenTxResult).tokenAddress });
-
-    if (oldCoin) return res.status(404).json({ success: false, message: 'Coin already saved' });
-
-    const urlSeg = coin.url.split('/');
-    const url = `${PINATA_GATEWAY_URL}/${urlSeg[urlSeg.length - 1]}`;
-
-    const newCoin = new Coin({
-        creator: coin.creator,
-        name: coin.name,
-        ticker: coin.ticker,
-        description: coin.description,
-        token: (txResult as CreateTokenTxResult).tokenAddress,
-        twitter: coin.twitter,
-        telegram: coin.telegram,
-        website: coin.website,
-        url,
-    });
-    const _newCoin = await newCoin.save();
-
-    const { amount, price } = txResult;
-
-    const adminData = await AdminData.findOne();
-
-    const record = [
-        {
-            holder: _newCoin.creator,
-            holdingStatus: 2,
-            amount: 0,
-            tx: txHash,
-            price: Math.floor(300_000 * 1_000_000_000_000 / 1_473_459_215) / 1_000_000_000_000,
-            feePercent: adminData?.feePercent
-        },
-    ]
-    
-    if (BigInt(amount) !== 0n) record.push({
-        holder: _newCoin.creator,
-        holdingStatus: 2,
-        amount: Number(amount),
-        tx: txHash,
-        price: Number(price) / 1_000_000_000_000,
-        feePercent: adminData?.feePercent
-    })
-
-    const newCoinStatus = new CoinStatus({
-        coinId: _newCoin._id,
-        record: record
-    })
-    await newCoinStatus.save();
-    const user = await User.findOne({ wallet: txResult.creator });
-    io.emit('TokenCreated', { coin: _newCoin, user });
-
-    res.status(200).send(_newCoin);
-})
-
-router.post('/buy-tokens', async (req, res) => {
-    try {
-        const { txHash } = req.body;
-        if (!txHash) return res.status(400).json({ success: false, message: 'txHash is required' });
-        const { success, txResult }: { success: boolean, txResult: BuyTokenTxResult | null } = await pollBuyTokenEventFromVelas(txHash);
-        if (!txResult || !success) return res.status(404).json({ success: false, message: 'Transaction receipt not found' });
-
-        const data: ResultType = {
-            tx: txHash,
-            owner: txResult.buyer,
-            mint: txResult.tokenAddress,
-            swapType: 2,
-            swapAmount: txResult.amount,
-            reserve1: txResult.reserve0,
-            reserve2: txResult.reserve1,
-            price: txResult.price
-        }
-
-        await setCoinStatus(data);
-        return res.status(200).json({ success: true });
-    } catch (error) {
-        console.log(error)
-        return res.status(404).json({ success: false })
-    }
-})
-
-router.post('/sell-tokens', async (req, res) => {
-    try {
-        const { txHash } = req.body;
-        if (!txHash) return res.status(400).json({ success: false, message: 'txHash is required' });
-        const { success, txResult }: { success: boolean, txResult: SellTokenTxResult | null } = await pollSellTokenEventFromVelas(txHash);
-        if (!txResult || !success) return res.status(404).json({ success: false, message: 'Transaction receipt not found' });
-
-        const data: ResultType = {
-            tx: txHash,
-            owner: txResult.seller,
-            mint: txResult.tokenAddress,
-            swapType: 1,
-            swapAmount: txResult.tokenSold,
-            reserve1: txResult.reserve0,
-            reserve2: txResult.reserve1,
-            price: txResult.price
-        }
-
-        await setCoinStatus(data);
-        return res.status(200).json({ success: true });
-    } catch (error) {
-        return res.status(404).json({ success: false })
-    }
-})
 
 // @route   POST /coin/:coinId
 // @desc    Update coin

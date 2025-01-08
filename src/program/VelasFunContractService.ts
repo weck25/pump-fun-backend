@@ -1,45 +1,22 @@
-import { HttpProvider, Web3 } from 'web3';
+import { LogsOutput, Web3, WebSocketProvider } from 'web3';
 import { Contract } from './Web3Service';
 import VelasFunABI from '../abi/VelasFunABI.json';
+import { events } from '../utils/events';
+import Coin from '../models/Coin';
+import AdminData from '../models/AdminData';
+import CoinStatus from '../models/CoinsStatus';
+import User from '../models/User';
+import { getIo } from "../sockets";
+import { setCoinStatus } from '../routes/coinStatus';
 
 const VelasFunContract: Contract = {
     address: process.env.VELAS_CONTRACT_ADDRESS || '',
     abi: VelasFunABI
 }
 
-const providerUrl = process.env.VELAS_PROVIDER_URL || 'https://evmexplorer.velas.com/rpc';
+const PINATA_GATEWAY_URL = process.env.PINATA_GATEWAY_URL;
 
-const web3 = new Web3(
-    new HttpProvider(providerUrl)
-);
-const contract = new web3.eth.Contract(VelasFunContract.abi, VelasFunContract.address);;
-
-export interface CreateTokenTxResult {
-    creator: string;
-    tokenAddress: string;
-    amount: string;
-    price: string;
-    reserve0: string;
-    reserve1: string;
-}
-
-export interface BuyTokenTxResult {
-    buyer: string;
-    tokenAddress: string;
-    amount: string;
-    price: string;
-    reserve0: string;
-    reserve1: string;
-}
-
-export interface SellTokenTxResult {
-    seller: string;
-    tokenAddress: string;
-    tokenSold: string;
-    price: string;
-    reserve0: string;
-    reserve1: string;
-}
+const web3 = new Web3(new WebSocketProvider(process.env.WSS_BASE_PROVIDER_URL || ''));
 
 export interface ResultType {
     tx: string,
@@ -52,109 +29,220 @@ export interface ResultType {
     price: string;
 }
 
-export const pollCreateEventFromVelas = async (txHash: string) => {
+function encodeEvent(event: string) {
+    const keccakHash = web3.utils.keccak256(event);
+    return keccakHash;
+}
+
+events.forEach(event => {
+    event.signatureHash = encodeEvent(event.signature);
+})
+
+const logsFilter = {
+    address: VelasFunContract.address,
+}
+
+export async function subscribeToLogs() {
     try {
-        const receipt = await web3.eth.getTransactionReceipt(txHash);
-        if (receipt && receipt.logs) {
-            for (const log of receipt.logs) {
-                if (log.topics && log.topics[0] === web3.utils.sha3('TokenCreated(address,address,string,string,uint256,uint256,uint256,uint256)')) {
-                    const decoded = web3.eth.abi.decodeLog(
-                        [
-                            { type: 'address', name: 'tokenAddress', indexed: true },
-                            { type: 'address', name: 'creator', indexed: true },
-                            { type: 'string', name: 'name' },
-                            { type: 'string', name: 'symbol' },
-                            { type: 'uint256', name: 'amount' },
-                            { type: 'uint256', name: 'price' },
-                            { type: 'uint256', name: 'reserve0' },
-                            { type: 'uint256', name: 'reserve1' },
-                        ],
-                        log.data ?? '',
-                        log.topics.slice(1)
-                    );
-                    const txResult: CreateTokenTxResult = { creator: decoded.creator as string, tokenAddress: decoded.tokenAddress as string, amount: decoded.amount as string, price: decoded.price as string, reserve0: decoded.reserve0 as string, reserve1: decoded.reserve1 as string }
-                    return { success: true, txResult };
-                }
-            }
-        }
-        return { success: false, txResult: null }
+        const subscription = await web3.eth.subscribe("logs", logsFilter);
+        console.log(`Subscription Id: ${subscription.id}`)
+        subscription.on("data", handleLogs);
+        subscription.on("error", handleError);
     } catch (error) {
-        console.log(error);
-        return { success: false, txResult: null }
+        console.log(error)
     }
 }
 
-export const pollBuyTokenEventFromVelas = async (txHash: string) => {
-    try {
-        const receipt = await web3.eth.getTransactionReceipt(txHash);
-        if (receipt && receipt.logs) {
-            for (const log of receipt.logs) {
-                if (log.topics && log.topics[0] === web3.utils.sha3('TokenPurchased(address,address,uint256,uint256,uint256,uint256)')) {
-                    console.log('receipt')
-                    const decoded = web3.eth.abi.decodeLog(
-                        [
-                            { type: 'address', name: 'buyer', indexed: true },
-                            { type: 'address', name: 'tokenAddress', indexed: true },
-                            { type: 'uint256', name: 'solAmount' },
-                            { type: 'uint256', name: 'price' },
-                            { type: 'uint256', name: 'reserve0' },
-                            { type: 'uint256', name: 'reserve1' },
-                        ],
-                        log.data ?? '',
-                        log.topics.slice(1)
+function handleLogs(log: LogsOutput) {
+    const matchedEvent = events.find(event => event.signatureHash === log.topics[0]);
+    if (matchedEvent) {
+        try {
+            const decodedLog = web3.eth.abi.decodeLog(
+                matchedEvent.abi.inputs,
+                log.data,
+                log.topics.slice(1)
+            );
+
+            console.log(`Decoded ${matchedEvent.name} log:`, decodedLog);
+
+            switch (matchedEvent.name) {
+                case "TokenCreated":
+                    handleTokenCreatedEvent(decodedLog, log.transactionHash as string);
+                    break;
+                case "TokenPurchased":
+                    handleTokenBuySellEvent(
+                        log.transactionHash as string,
+                        decodedLog.buyer as string,
+                        decodedLog.tokenAddress as string,
+                        2,
+                        decodedLog.amount as string,
+                        decodedLog.reserve0 as string,
+                        decodedLog.reserve1 as string,
+                        decodedLog.price as string
                     );
-                    const txResult: BuyTokenTxResult = {
-                        buyer: decoded.buyer as string,
-                        tokenAddress: decoded.tokenAddress as string,
-                        amount: decoded.solAmount as string,
-                        price: decoded.price as string,
-                        reserve0: decoded.reserve0 as string,
-                        reserve1: decoded.reserve1 as string,
-                    }
-                    return { success: true, txResult };
-                }
+                    break;
+                case "TokenSold":
+                    handleTokenBuySellEvent(
+                        log.transactionHash as string,
+                        decodedLog.seller as string,
+                        decodedLog.tokenAddress as string,
+                        1,
+                        decodedLog.tokensSold as string,
+                        decodedLog.reserve0 as string,
+                        decodedLog.reserve1 as string,
+                        decodedLog.price as string
+                    );
+                    break;
+                case "GraduatingTokenToUniswap":
+                    handleGraduatingEvent(decodedLog.tokenAddress as string);
+                    break;
+                case "TradingEnabledOnUniswap":
+                    handleTradingEnabledOnUniswap(decodedLog.tokenAddress as string, decodedLog.uniswapPair as string);
+                    break;
             }
+        } catch (error) {
+            console.error(`Error decoding ${matchedEvent.name} log:`, error);
         }
-        return { success: false, txResult: null };
-    } catch (error) {
-        console.log(error);
-        return { success: false, txResult: null };
+    } else {
+        console.warn("Unknown event received: ", log);
     }
 }
 
-export const pollSellTokenEventFromVelas = async (txHash: string) => {
+function handleError(error: Error) {
+    console.error("Subscription error: ", error);
+}
+
+async function handleTokenCreatedEvent(decodedLog: any, txHash: string) {
     try {
-        const receipt = await web3.eth.getTransactionReceipt(txHash);
-        if (receipt && receipt.logs) {
-            for (const log of receipt.logs) {
-                if (log.topics && log.topics[0] === web3.utils.sha3('TokenSold(address,address,uint256,uint256,uint256,uint256)')) {
-                    const decoded = web3.eth.abi.decodeLog(
-                        [
-                            { type: 'address', name: 'seller', indexed: true },
-                            { type: 'address', name: 'tokenAddress', indexed: true },
-                            { type: 'uint256', name: 'tokensSold' },
-                            { type: 'uint256', name: 'price' },
-                            { type: 'uint256', name: 'reserve0' },
-                            { type: 'uint256', name: 'reserve1' },
-                        ],
-                        log.data ?? '',
-                        log.topics.slice(1)
-                    );
-                    const txResult: SellTokenTxResult = {
-                        seller: decoded.seller as string,
-                        tokenAddress: decoded.tokenAddress as string,
-                        tokenSold: decoded.tokensSold as string,
-                        price: decoded.price as string,
-                        reserve0: decoded.reserve0 as string,
-                        reserve1: decoded.reserve1 as string,
-                    }
-                    return { success: true, txResult };
-                }
-            }
-        }
-        return { success: false, txResult: null };
+        const io = getIo()
+        const {
+            tokenAddress,
+            creator,
+            name,
+            symbol,
+            description,
+            image,
+            twitter,
+            telegram,
+            website,
+            amount,
+            price,
+            reserve0,
+            reserve1
+        } = decodedLog
+
+        const oldCoin = await Coin.findOne({ token: tokenAddress });
+
+        if (oldCoin) return;
+
+        const urlSeg = image.split('/');
+        const url = `${PINATA_GATEWAY_URL}/${urlSeg[urlSeg.length - 1]}`;
+
+        const user = await User.findOne({ wallet: creator });
+        if (!user) return;
+
+        const newCoin = new Coin({
+            creator: user._id,
+            name: name,
+            ticker: symbol,
+            description: description,
+            token: tokenAddress,
+            twitter: twitter,
+            telegram: telegram,
+            website: website,
+            url,
+            reserveOne: Number(reserve0),
+            reserveTwo: Number(reserve1)
+        });
+        const _newCoin = await newCoin.save();
+
+        const adminData = await AdminData.findOne();
+
+        const record = [
+            {
+                holder: _newCoin.creator,
+                holdingStatus: 2,
+                amount: 0,
+                tx: txHash,
+                price: Math.floor(1.8 * 1_000_000_000_000 / 1_087_598_453) / 1_000_000_000_000,
+                feePercent: adminData?.feePercent
+            },
+        ]
+
+        if (BigInt(amount) !== 0n) record.push({
+            holder: _newCoin.creator,
+            holdingStatus: 2,
+            amount: Number(amount),
+            tx: txHash,
+            price: Number(price) / 1_000_000_000_000,
+            feePercent: adminData?.feePercent
+        })
+
+        const newCoinStatus = new CoinStatus({
+            coinId: _newCoin._id,
+            record: record
+        })
+        await newCoinStatus.save();
+        io.emit('TokenCreated', { coin: _newCoin, user });
     } catch (error) {
-        console.log(error);
-        return { success: false, txResult: null };
+        console.error("Error is occurred while token created: ", error)
+    }
+}
+
+async function handleTokenBuySellEvent(
+    tx: string,
+    owner: string,
+    mint: string,
+    swapType: number,
+    swapAmount: string,
+    reserve1: string,
+    reserve2: string,
+    price: string,
+) {
+    try {
+        const data: ResultType = {
+            tx,
+            owner,
+            mint,
+            swapType,
+            swapAmount,
+            reserve1,
+            reserve2,
+            price
+        }
+
+        await setCoinStatus(data);
+    } catch (error) {
+        console.error("Error is occurred while token buying and selling: ", error)
+    }
+}
+
+async function handleGraduatingEvent(tokenAddress: string) {
+    try {
+        const coin = await Coin.findOne({ token: tokenAddress });
+        if (!coin) {
+            console.error("Graduating token not found");
+            return;
+        }
+        coin.tradingPaused = true;
+        await coin.save();
+    } catch (error) {
+        console.error("Error is occurred while graduating token: ", error);
+    }
+}
+
+async function handleTradingEnabledOnUniswap(tokenAddress: string, uniswapPair: string) {
+    try {
+        const coin = await Coin.findOne({ token: tokenAddress });
+        if (!coin) {
+            console.error("Graduating token not found");
+            return;
+        }
+        coin.tradingOnUniswap = true;
+        coin.tradingPaused = false;
+        coin.uniswapPair = uniswapPair;
+        await coin.save();
+    } catch (error) {
+        console.error("Error is occurred while enable to trade on uniswap: ", error);
     }
 }
