@@ -31,8 +31,8 @@ export const setCoinStatus = async (data: ResultType) => {
             lastTime: coinStatus?.record[coinStatus.record.length - 1].time, 
             closedPrice: coinStatus?.record[coinStatus.record.length - 1].price 
         })
-        io.emit('update-bonding-curve', { tokenId: coin?._id, reserveOne: Number(data.reserve1), reserveTwo: Number(data.reserve2) });
     }
+    io.emit('update-bonding-curve', { tokenId: coin?._id, price: Number(data.price) });
     io.emit('transaction', { 
         isBuy: data.swapType, 
         user: user, 

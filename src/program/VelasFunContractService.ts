@@ -219,6 +219,7 @@ async function handleTokenBuySellEvent(
 
 async function handleGraduatingEvent(tokenAddress: string) {
     try {
+        const io = getIo();
         const coin = await Coin.findOne({ token: tokenAddress });
         if (!coin) {
             console.error("Graduating token not found");
@@ -226,6 +227,7 @@ async function handleGraduatingEvent(tokenAddress: string) {
         }
         coin.tradingPaused = true;
         await coin.save();
+        io.emit('graduating-to-dex', coin);
     } catch (error) {
         console.error("Error is occurred while graduating token: ", error);
     }
@@ -233,6 +235,7 @@ async function handleGraduatingEvent(tokenAddress: string) {
 
 async function handleTradingEnabledOnUniswap(tokenAddress: string, uniswapPair: string) {
     try {
+        const io = getIo();
         const coin = await Coin.findOne({ token: tokenAddress });
         if (!coin) {
             console.error("Graduating token not found");
@@ -242,6 +245,7 @@ async function handleTradingEnabledOnUniswap(tokenAddress: string, uniswapPair: 
         coin.tradingPaused = false;
         coin.uniswapPair = uniswapPair;
         await coin.save();
+        io.emit('trading-enabled-on-uniswap', coin);
     } catch (error) {
         console.error("Error is occurred while enable to trade on uniswap: ", error);
     }
