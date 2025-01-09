@@ -24,7 +24,6 @@ export const init = () => {
           creatorReward: 0,
           velasFunReward: 0,
           graduationMarketCap: 1.75,
-          currentKing: '677e3f753fb727a2211e7198'
         });
         await newAdminData.save()
       }
