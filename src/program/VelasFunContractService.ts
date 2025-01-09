@@ -183,7 +183,7 @@ async function handleTokenCreatedEvent(decodedLog: any, txHash: string) {
             record: record
         })
         await newCoinStatus.save();
-        io.emit('TokenCreated', { coin: _newCoin, user });
+        io.emit('TokenCreated', { coin: _newCoin, user, txHash });
     } catch (error) {
         console.error("Error is occurred while token created: ", error)
     }
