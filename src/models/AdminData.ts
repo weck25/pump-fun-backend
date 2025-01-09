@@ -23,6 +23,7 @@ const adminDataSchema = new mongoose.Schema(
         footerContent: { type: String, default: '' },
         policy: { type: String, default: '' },
         terms: { type: String, default: '' },
+        currentKing: { type: String }
     },
     { timestamps: true }
 );

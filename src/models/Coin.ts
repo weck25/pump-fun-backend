@@ -17,6 +17,7 @@ const coinSchema = new mongoose.Schema(
         tradingOnUniswap: { type: Boolean, default: false },
         tradingPaused: { type: Boolean, default: false },
         uniswapPair: { type: String, default: '' },
+        kingDate: { type: Date },
         date: { type: Date, default: () => new Date() }
     },
     { timestamps: true }

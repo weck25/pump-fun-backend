@@ -131,6 +131,27 @@ router.get('/', async (req, res) => {
     }
 });
 
+// @route GET /coin/get-king
+// @desc get King Coin
+// @access Public
+router.get('/get-king-coin', async (req, res) => {
+    const adminData = await AdminData.findOne();
+    if (!adminData?.currentKing) return res.status(200).json(null);
+
+    const king = await Coin.findOne({ token: adminData.currentKing }).populate('creator');
+    if (!king) return res.status(200).json(null);
+
+    const coinStatus = await CoinStatus.findOne({ coinId: king._id });
+    const lastPrice = coinStatus?.record ? coinStatus.record[coinStatus?.record.length - 1].price : 0.00003;
+    const coinWithPrice = {
+        ...king.toObject(),
+        price: lastPrice,
+        graduationMarketCap: adminData?.graduationMarketCap || 5
+    }
+    return res.status(200).json(coinWithPrice);
+})
+
+
 // @route   GET /coin/:coinid
 // @desc    Get coins created by coinid
 // @access  Public
@@ -170,6 +191,16 @@ router.get('/user/:userID', async (req, res) => {
             .limit(perPage)
             .lean();
 
+        // Use Promise.all to handle async operations properly
+        const coinsWithPrice = await Promise.all(coins.map(async coin => {
+            const coinStatus = await CoinStatus.findOne({ coinId: coin._id });
+            const lastPrice = coinStatus?.record ? coinStatus.record[coinStatus.record.length - 1].price : 0.00003;
+            return {
+                ...coin,
+                price: lastPrice
+            }
+        }));
+
         const totalItems = await Coin.countDocuments({ creator });
         const totalPages = Math.ceil(totalItems / perPage);
 
@@ -180,7 +211,7 @@ router.get('/user/:userID', async (req, res) => {
                 currentPage: currentPage.toString(),
                 perPage: perPage.toString(),
             },
-            coins
+            coins: coinsWithPrice
         });
     } catch (err) {
         console.error('Error fetching coins:', err);

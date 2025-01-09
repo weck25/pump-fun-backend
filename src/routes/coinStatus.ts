@@ -23,14 +23,26 @@ export const setCoinStatus = async (data: ResultType) => {
         const coinStatus = await CoinStatus.findOne({ coinId: coin?._id })
         
         coinStatus?.record.push(newTx);
-        coinStatus?.save()
+        await coinStatus?.save()
         
-        await Coin.findOneAndUpdate({ token: data.mint }, { reserveOne: Number(data.reserve1), reserveTwo: Number(data.reserve2) }, { new: true });
+        if (adminData && newTx.price * 1_000_000_000 * 2 >= (adminData?.graduationMarketCap || 5)) {
+            const coin = await Coin.findOneAndUpdate({ token: data.mint }, { reserveOne: Number(data.reserve1), reserveTwo: Number(data.reserve2), kingDate: new Date() }, { new: true }).populate('creator');
+            if (coin) {
+                adminData.currentKing = coin.token;
+                await adminData.save();
+            }
+            io.emit('king-changed', coin)
+        }
+        else {
+            await Coin.findOneAndUpdate({ token: data.mint }, { reserveOne: Number(data.reserve1), reserveTwo: Number(data.reserve2) }, { new: true });
+        }
+
         io.emit(`price-update-${coin?.token}`, { 
             price: newTx.price, 
             lastTime: coinStatus?.record[coinStatus.record.length - 1].time, 
             closedPrice: coinStatus?.record[coinStatus.record.length - 1].price 
         })
+
     }
     io.emit('update-bonding-curve', { tokenId: coin?._id, price: Number(data.price) / 1_000_000_000_000 });
     io.emit('transaction', { 
