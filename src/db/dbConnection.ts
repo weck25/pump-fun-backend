@@ -23,7 +23,10 @@ export const init = () => {
           ],
           creatorReward: 0,
           velasFunReward: 0,
-          graduationMarketCap: 1.75,
+          graduationMarketCap: 1.8,
+          kingPercent: 65,
+          feePercent: 1,
+          creationFee: 0.0003
         });
         await newAdminData.save()
       }

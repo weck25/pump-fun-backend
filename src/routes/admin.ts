@@ -648,7 +648,7 @@ router.post('/update-banner-info', adminAuth, upload.single('bannerUrl'), async 
 
 router.get('/get-metadata', async (req, res) => {
     try {
-        const adminData = await AdminData.findOne({}, 'logoTitle logoUrl bannerTitle bannerContent bannerUrl footerContent facebook twitter youtube linkedin policy terms siteKill');
+        const adminData = await AdminData.findOne({}, 'logoTitle logoUrl bannerTitle bannerContent bannerUrl footerContent facebook twitter youtube linkedin policy terms siteKill kingPercent');
         return res.status(200).json(adminData)
     } catch (error) {
         console.log(error);

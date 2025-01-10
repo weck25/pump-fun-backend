@@ -238,5 +238,64 @@ export const events: Event[] = [
             name: "TradingEnabledOnUniswap",
             type: "event"
         }
+    },
+    {
+        name: "VariablesUpdated",
+        signature: "VariablesUpdated(bool,address[],uint256,uint256,uint256,uint256,address,uint256)",
+        abi: {
+            "anonymous": false,
+            "inputs": [
+                {
+                    "indexed": false,
+                    "internalType": "bool",
+                    "name": "paused",
+                    "type": "bool"
+                },
+                {
+                    "indexed": false,
+                    "internalType": "address[]",
+                    "name": "admin",
+                    "type": "address[]"
+                },
+                {
+                    "indexed": false,
+                    "internalType": "uint256",
+                    "name": "creationFee",
+                    "type": "uint256"
+                },
+                {
+                    "indexed": false,
+                    "internalType": "uint256",
+                    "name": "feePercent",
+                    "type": "uint256"
+                },
+                {
+                    "indexed": false,
+                    "internalType": "uint256",
+                    "name": "creatorReward",
+                    "type": "uint256"
+                },
+                {
+                    "indexed": false,
+                    "internalType": "uint256",
+                    "name": "baseFunReward",
+                    "type": "uint256"
+                },
+                {
+                    "indexed": false,
+                    "internalType": "address",
+                    "name": "feeAddress",
+                    "type": "address"
+                },
+                {
+                    "indexed": false,
+                    "internalType": "uint256",
+                    "name": "graduationMarketCap",
+                    "type": "uint256"
+                }
+            ],
+            "name": "VariablesUpdated",
+            "type": "event"
+        }
     }
 ]

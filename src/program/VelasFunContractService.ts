@@ -1,4 +1,4 @@
-import { LogsOutput, Web3, WebSocketProvider } from 'web3';
+import { ERR_TX_UNSUPPORTED_EIP_1559, LogsOutput, Web3, WebSocketProvider } from 'web3';
 import { Contract } from './Web3Service';
 import VelasFunABI from '../abi/VelasFunABI.json';
 import { events } from '../utils/events';
@@ -99,6 +99,17 @@ function handleLogs(log: LogsOutput) {
                 case "TradingEnabledOnUniswap":
                     handleTradingEnabledOnUniswap(decodedLog.tokenAddress as string, decodedLog.uniswapPair as string);
                     break;
+                case "VariablesUpdated":
+                    handleVariablesUpdated(
+                        decodedLog.paused as boolean,
+                        decodedLog.admin as string[],
+                        decodedLog.creationFee as string,
+                        decodedLog.feePercent as string,
+                        decodedLog.creatorReward as string,
+                        decodedLog.baseFunReward as string,
+                        decodedLog.feeAddress as string,
+                        decodedLog.graduationMarketCap as string
+                    )
             }
         } catch (error) {
             console.error(`Error decoding ${matchedEvent.name} log:`, error);
@@ -164,7 +175,7 @@ async function handleTokenCreatedEvent(decodedLog: any, txHash: string) {
                 holdingStatus: 2,
                 amount: 0,
                 tx: txHash,
-                price: Math.floor(1.8 * 1_000_000_000_000 / 1_087_598_453) / 1_000_000_000_000,
+                price: 8.27e-10,
                 feePercent: adminData?.feePercent
             },
         ]
@@ -249,4 +260,26 @@ async function handleTradingEnabledOnUniswap(tokenAddress: string, uniswapPair: 
     } catch (error) {
         console.error("Error is occurred while enable to trade on uniswap: ", error);
     }
+}
+
+async function handleVariablesUpdated(
+    paused: boolean,
+    admin: string[],
+    creationFee: string,
+    feePercent: string,
+    creatorReward: string,
+    velasFunReward: string,
+    feeAddress: string,
+    graduationMarketCap: string
+) {
+    await AdminData.findOneAndUpdate({}, {
+        siteKill: paused,
+        admin: admin,
+        creationFee: Number(BigInt(creationFee) / BigInt(1_000_000_000_000_000_000)),
+        feePercent: Number(feePercent),
+        creatorReward: Number(BigInt(creatorReward) / BigInt(1_000_000_000_000_000_000)),
+        velasFunReward: Number(BigInt(velasFunReward) / BigInt(1_000_000_000_000_000_000)),
+        feeAddress,
+        graduationMarketCap: Number(BigInt(graduationMarketCap) / BigInt(1_000_000_000_000_000_000))
+    })
 }
