@@ -194,10 +194,12 @@ router.get('/user/:userID', async (req, res) => {
         // Use Promise.all to handle async operations properly
         const coinsWithPrice = await Promise.all(coins.map(async coin => {
             const coinStatus = await CoinStatus.findOne({ coinId: coin._id });
+            const messages = await Message.countDocuments({ coinId: coin._id });
             const lastPrice = coinStatus?.record ? coinStatus.record[coinStatus.record.length - 1].price : 0.00003;
             return {
                 ...coin,
-                price: lastPrice
+                price: lastPrice,
+                replies: messages
             }
         }));
 

@@ -82,7 +82,6 @@ router.get('/user/:userId', async (req, res) => {
 // @access  Public
 router.post('/', async (req, res) => {
     const { body } = req;
-    console.log('new post')
     try {
         let newMsg;
         if (body.img) {

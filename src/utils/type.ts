@@ -10,6 +10,7 @@ export type CandlePrice = {
   low: number;
   close: number;
   time: number;
+  volumn: number;
 };
 
 export interface CoinInfo {

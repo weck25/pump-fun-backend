@@ -72,6 +72,7 @@ export async function fetchPriceChartData(pairIndex: number, start: number, end:
         low: lo,
         close: en,
         time: curCdStart,
+        volumn: 0
       });
   }
 

@@ -9,12 +9,15 @@ export const setCoinStatus = async (data: ResultType) => {
     const io = getIo();
     const coin = await Coin.findOne({ token: data.mint });
     const user = await User.findOne({ wallet: data.owner });
+    const ethAmount = data.swapType === 2 ? Number(data.swapAmount) : (coin?.reserveTwo || 0) - Number(data.reserve2)
+    const tokenAmount = data.swapType === 1 ? Number(data.swapAmount) : Number(data.reserve1) - (coin?.reserveOne || 0) 
     if (!coin?.tradingOnUniswap) {
         const adminData = await AdminData.findOne();
         const newTx = {
             holder: user?._id,
             holdingStatus: data.swapType,
-            amount: data.swapType === 2 ? Number(data.swapAmount) / 1_000_000_000_000_000_000 : Number(data.swapAmount),
+            ethAmount: ethAmount / 1_000_000_000_000_000_000,
+            tokenAmount: tokenAmount,
             tx: data.tx,
             price: Number(data.price) / 1_000_000_000_000,
             feePercent: adminData?.feePercent
@@ -44,12 +47,13 @@ export const setCoinStatus = async (data: ResultType) => {
         })
 
     }
-    io.emit('update-bonding-curve', { tokenId: coin?._id, price: Number(data.price) / 1_000_000_000_000 });
+    io.emit('update-bonding-curve', { tokenId: coin?._id, price: Number(data.price) / 1_000_000_000_000, reserveTwo: Number(data.reserve2) });
     io.emit('transaction', { 
         isBuy: data.swapType, 
         user: user, 
         token: coin, 
-        amount: data.swapType === 2 ? (Number(data.swapAmount) / 1_000_000_000_000_000_000).toString() : Number(data.swapAmount).toString(), 
+        ethAmount: ethAmount / 1_000_000_000_000_000_000, 
+        tokenAmount,
         ticker: coin?.ticker, 
         tx: data.tx, 
         price: (Number(data.price) / 1_000_000_000_000).toString(),

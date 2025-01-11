@@ -70,7 +70,7 @@ router.get('/user-holdings/:userId', async (req, res) => {
 
             const totalAmount = userRecords.reduce((sum, record) => {
                 const multiplier = (-1) ** (record.holdingStatus);
-                return sum + multiplier * record.amount * record.feePercent;
+                return sum + multiplier * record.tokenAmount;
             }, 0);
 
             if (totalAmount !== 0) {

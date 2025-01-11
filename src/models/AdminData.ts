@@ -11,7 +11,7 @@ const adminDataSchema = new mongoose.Schema(
         velasFunReward: { type: Number, default: 100 },
         graduationMarketCap: { type: Number, default: 1.75 },
         siteKill: { type: Boolean, default: false },
-        logoTitle: { type: String, default: 'Velas' },
+        logoTitle: { type: String, default: '' },
         logoUrl: { type: String, default: '' },
         facebook: { type: String, default: '' },
         twitter: { type: String, default: '' },

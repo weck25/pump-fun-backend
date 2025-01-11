@@ -8,7 +8,8 @@ const coinStatusSchema = new mongoose.Schema(
             holder: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
             holdingStatus: { type: Number, required: true },
             time: { type: Date, default: Date.now },
-            amount: { type: Number, default: 0 },
+            ethAmount: { type: Number, default: 0 },
+            tokenAmount: { type: Number, default: 0 },
             price: { type: Number, required: true },
             tx: { type: String, required: true },
             feePercent: { type: Number, required: true }
