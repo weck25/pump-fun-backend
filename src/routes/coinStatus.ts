@@ -4,15 +4,28 @@ import Coin from "../models/Coin";
 import User from "../models/User";
 import { getIo } from "../sockets";
 import AdminData from "../models/AdminData";
+import Transaction from "../models/Transaction";
 
 export const setCoinStatus = async (data: ResultType) => {
     const io = getIo();
+    
     const coin = await Coin.findOne({ token: data.mint });
     const user = await User.findOne({ wallet: data.owner });
+    const adminData = await AdminData.findOne();
+    
     const ethAmount = data.swapType === 2 ? Number(data.swapAmount) : (coin?.reserveTwo || 0) - Number(data.reserve2)
     const tokenAmount = data.swapType === 1 ? Number(data.swapAmount) : Number(data.reserve1) - (coin?.reserveOne || 0) 
+    
+    const newTransaction = new Transaction({
+        type: data.swapType === 2 ? 'buy' : 'sell',
+        txHash: data.tx,
+        user: user?._id,
+        amount: ethAmount / 100_000_000_000_000_000_000,
+    });
+
+    await newTransaction.save();
+    
     if (!coin?.tradingOnUniswap) {
-        const adminData = await AdminData.findOne();
         const newTx = {
             holder: user?._id,
             holdingStatus: data.swapType,

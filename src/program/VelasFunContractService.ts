@@ -8,6 +8,7 @@ import CoinStatus from '../models/CoinsStatus';
 import User from '../models/User';
 import { getIo } from "../sockets";
 import { setCoinStatus } from '../routes/coinStatus';
+import Transaction from '../models/Transaction';
 
 const VelasFunContract: Contract = {
     address: process.env.VELAS_CONTRACT_ADDRESS || '',
@@ -97,7 +98,7 @@ function handleLogs(log: LogsOutput) {
                     handleGraduatingEvent(decodedLog.tokenAddress as string);
                     break;
                 case "TradingEnabledOnUniswap":
-                    handleTradingEnabledOnUniswap(decodedLog.tokenAddress as string, decodedLog.uniswapPair as string);
+                    handleTradingEnabledOnUniswap(decodedLog.tokenAddress as string, decodedLog.uniswapPair as string, log.transactionHash as string);
                     break;
                 case "VariablesUpdated":
                     handleVariablesUpdated(
@@ -166,12 +167,13 @@ async function handleTokenCreatedEvent(decodedLog: any, txHash: string) {
             reserveTwo: Number(reserve1)
         });
         const _newCoin = await newCoin.save();
+        io.emit('TokenCreated', { coin: _newCoin, user, txHash });
 
         const adminData = await AdminData.findOne();
 
         const record = [
             {
-                holder: _newCoin.creator,
+                holder: user._id,
                 holdingStatus: 2,
                 amount: 0,
                 tx: txHash,
@@ -181,7 +183,7 @@ async function handleTokenCreatedEvent(decodedLog: any, txHash: string) {
         ]
 
         if (BigInt(amount) !== 0n) record.push({
-            holder: _newCoin.creator,
+            holder: user._id,
             holdingStatus: 2,
             amount: Number(amount) / 1_000_000_000_000_000_000,
             tx: txHash,
@@ -194,7 +196,24 @@ async function handleTokenCreatedEvent(decodedLog: any, txHash: string) {
             record: record
         })
         await newCoinStatus.save();
-        io.emit('TokenCreated', { coin: _newCoin, user, txHash });
+
+        const newTransaction = new Transaction({
+            txHash,
+            type: 'creation',
+            user: user._id,
+            amount: adminData?.creationFee,
+        });
+        await newTransaction.save();
+
+        if (BigInt(amount) !== 0n) {
+            const newTransaction = new Transaction({
+                txHash,
+                type: 'buy',
+                user: user._id,
+                amount: Number(amount) / 100_00_000_000_000_000_000,
+            });
+            await newTransaction.save();
+        }
     } catch (error) {
         console.error("Error is occurred while token created: ", error)
     }
@@ -244,7 +263,7 @@ async function handleGraduatingEvent(tokenAddress: string) {
     }
 }
 
-async function handleTradingEnabledOnUniswap(tokenAddress: string, uniswapPair: string) {
+async function handleTradingEnabledOnUniswap(tokenAddress: string, uniswapPair: string, txHash: string) {
     try {
         const io = getIo();
         const coin = await Coin.findOne({ token: tokenAddress });
@@ -256,6 +275,17 @@ async function handleTradingEnabledOnUniswap(tokenAddress: string, uniswapPair: 
         coin.tradingPaused = false;
         coin.uniswapPair = uniswapPair;
         await coin.save();
+
+        const adminData = await AdminData.findOne();
+
+        const newTransaction = new Transaction({
+            user: coin.creator,
+            type: 'graduation',
+            txHash,
+            amount: adminData?.velasFunReward
+        })
+        await newTransaction.save();
+
         io.emit('trading-enabled-on-uniswap', coin);
     } catch (error) {
         console.error("Error is occurred while enable to trade on uniswap: ", error);
@@ -275,11 +305,11 @@ async function handleVariablesUpdated(
     await AdminData.findOneAndUpdate({}, {
         siteKill: paused,
         admin: admin,
-        creationFee: Number(BigInt(creationFee) / BigInt(1_000_000_000_000_000_000)),
+        creationFee: Number(creationFee) / 1_000_000_000_000_000_000,
         feePercent: Number(feePercent),
-        creatorReward: Number(BigInt(creatorReward) / BigInt(1_000_000_000_000_000_000)),
-        velasFunReward: Number(BigInt(velasFunReward) / BigInt(1_000_000_000_000_000_000)),
+        creatorReward: Number(creatorReward) / 1_000_000_000_000_000_000,
+        velasFunReward: Number(velasFunReward) / 1_000_000_000_000_000_000,
         feeAddress,
-        graduationMarketCap: Number(BigInt(graduationMarketCap) / BigInt(1_000_000_000_000_000_000))
+        graduationMarketCap: Number(graduationMarketCap) / 1_000_000_000_000_000_000
     })
 }

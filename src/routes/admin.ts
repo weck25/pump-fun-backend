@@ -8,6 +8,7 @@ import multer from 'multer';
 import path from "path";
 import fs from 'fs';
 import FAQ from "../models/FAQ";
+import Transaction from "../models/Transaction";
 
 const router = express.Router();
 
@@ -691,11 +692,21 @@ router.put('/faqs/:id', adminAuth, async (req, res) => {
     }
 })
 
-router.delete('/faqs/:id', async (req, res) => {
+router.delete('/faqs/:id', adminAuth, async (req, res) => {
     try {
         const { id } = req.params;
         await FAQ.findByIdAndDelete(id);
         return res.status(204).send();
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json(error);
+    }
+})
+
+router.get('/get-txs', adminAuth, async (req, res) => {
+    try {
+        const txs = await Transaction.find().populate('user');
+        return res.status(200).json(txs)
     } catch (error) {
         console.log(error);
         return res.status(500).json(error);
