@@ -3,9 +3,9 @@ import mongoose from 'mongoose';
 
 const adminDataSchema = new mongoose.Schema(
     {
-        admin: [{ type: String, default: '0x1066f339C393Cd41D1acF0f0AAE7CDE9f3B30596' }],
+        admin: [{ type: String }],
         feePercent: { type: Number, default: 1 },
-        feeAddress: { type: String, default: '0x4191965460D99eA9486519727a91Dbf112bd4d5f' },
+        feeAddress: { type: String },
         creationFee: { type: Number, default: 0.0007 },
         creatorReward: { type: Number, default: 100 },
         velasFunReward: { type: Number, default: 100 },

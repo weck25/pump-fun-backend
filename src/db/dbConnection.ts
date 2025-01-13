@@ -20,6 +20,7 @@ export const init = () => {
             '0xb5C64BfD79f0048EA88E1699834273704aBAB3D3',
             '0xd1DD7014C690374e113AF710886097e6B68CBCdF'
           ],
+          feeAddress: '0xd1DD7014C690374e113AF710886097e6B68CBCdF',
           creatorReward: 0,
           velasFunReward: 0,
           graduationMarketCap: 1.8,
