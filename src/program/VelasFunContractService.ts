@@ -210,7 +210,7 @@ async function handleTokenCreatedEvent(decodedLog: any, txHash: string) {
                 txHash,
                 type: 'buy',
                 user: user._id,
-                amount: Number(amount) / 100_00_000_000_000_000_000,
+                amount: Number(amount) / 100_000_000_000_000_000_000,
             });
             await newTransaction.save();
         }

@@ -9,6 +9,7 @@ import path from "path";
 import fs from 'fs';
 import FAQ from "../models/FAQ";
 import Transaction from "../models/Transaction";
+import moment from "moment";
 
 const router = express.Router();
 
@@ -115,12 +116,14 @@ const getBalanceOverview = async () => {
                                         { $eq: ['$holdingStatus', 1] },
                                         {
                                             $divide: [
-                                                { $multiply: [{
-                    $divide: [
-                        { $multiply: ['$record.amount', '$record.feePercent'] },
-                        100
-                    ]
-                }, '$tokenPrice'] },
+                                                {
+                                                    $multiply: [{
+                                                        $divide: [
+                                                            { $multiply: ['$record.amount', '$record.feePercent'] },
+                                                            100
+                                                        ]
+                                                    }, '$tokenPrice']
+                                                },
                                                 1000000
                                             ]
                                         },
@@ -712,5 +715,120 @@ router.get('/get-txs', adminAuth, async (req, res) => {
         return res.status(500).json(error);
     }
 })
+
+router.get('/get-total-profit', adminAuth, async (req, res) => {
+    try {
+        const totalProfit = await Transaction.aggregate([
+            {
+                $group: {
+                    _id: null,
+                    totalAmount: { $sum: "$amount" }
+                }
+            }
+        ]);
+
+        const total = totalProfit.length > 0 ? totalProfit[0].totalAmount : 0;
+
+        return res.status(200).json({ total });
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json(error);
+    }
+})
+
+router.get("/get-profit-data", adminAuth, async (req, res) => {
+    try {
+        const { option } = req.query; 
+        const now = new Date();
+
+        let start: Date;
+        let end: Date;
+        let intervalUnit: string;
+        let totalUnits: number;
+
+        if (option === "day") {
+            start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+            end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+            intervalUnit = "hour";
+            totalUnits = 24;
+        } else if (option === "week") {
+            const dayOfWeek = now.getUTCDay();
+            start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - dayOfWeek));
+            end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
+            intervalUnit = "day";
+            totalUnits = 7;
+        } else if (option === "month") {
+            start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+            end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+            intervalUnit = "day";
+            totalUnits = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate();
+        } else {
+            return res.status(400).json({ error: "Invalid option specified." });
+        }
+
+        const fullTimeline = Array.from({ length: totalUnits }, (_, i) => {
+            const time = new Date(start.getTime());
+            if (intervalUnit === "hour") {
+                return {
+                    time: moment.utc(start).add(i, 'hours').format('HH'),
+                    profit: 0
+                }
+            } else if (intervalUnit === "day") {
+                time.setUTCDate(start.getUTCDate() + i);
+            }
+            return {
+                time: time.toISOString(),
+                profit: 0,
+            };
+        });
+
+        const transactions = await Transaction.aggregate([
+            {
+                $match: {
+                    createdAt: { $gte: start, $lt: end }, 
+                },
+            },
+            {
+                $group: {
+                    _id: {
+                        $switch: {
+                            branches: [
+                                { case: { $eq: [option, "day"] }, then: { $hour: "$createdAt" } }, 
+                                { case: { $eq: [option, "week"] }, then: { $dayOfWeek: "$createdAt" } },
+                                { case: { $eq: [option, "month"] }, then: { $dayOfMonth: "$createdAt" } }, 
+                            ],
+                            default: { $hour: "$createdAt" },
+                        },
+                    },
+                    totalProfit: { $sum: "$amount" },
+                },
+            },
+        ]);
+
+        const result = fullTimeline.map((interval) => {
+            const matchingTransaction = transactions.find((t) => {
+                if (option === "day") {
+                    return interval.time === moment(t._id).format('HH');
+                } else if (option === "week") {
+                    return moment(interval.time).isoWeekday() === t._id;
+                } else if (option === "month") {
+                    return parseInt(interval.time.slice(8, 10)) === t._id;
+                }
+                return false;
+            });
+
+            return {
+                time: option === 'week' ? moment(interval.time).format('ddd') : option === 'month' ? moment(interval.time).format('dd') : interval.time,
+                profit: matchingTransaction ? matchingTransaction.totalProfit : 0,
+            };
+        });
+
+        return res.json(result);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json(error);
+    }
+});
+
 
 export default router;
