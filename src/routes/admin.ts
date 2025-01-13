@@ -769,10 +769,7 @@ router.get("/get-profit-data", adminAuth, async (req, res) => {
         const fullTimeline = Array.from({ length: totalUnits }, (_, i) => {
             const time = new Date(start.getTime());
             if (intervalUnit === "hour") {
-                return {
-                    time: moment.utc(start).add(i, 'hours').format('HH'),
-                    profit: 0
-                }
+                time.setUTCHours(i);
             } else if (intervalUnit === "day") {
                 time.setUTCDate(start.getUTCDate() + i);
             }
@@ -808,7 +805,7 @@ router.get("/get-profit-data", adminAuth, async (req, res) => {
         const result = fullTimeline.map((interval) => {
             const matchingTransaction = transactions.find((t) => {
                 if (option === "day") {
-                    return interval.time === moment(t._id).format('HH');
+                    return moment(interval.time).format('HH') === moment(t._id).format('HH');
                 } else if (option === "week") {
                     return moment(interval.time).isoWeekday() === t._id;
                 } else if (option === "month") {
@@ -818,7 +815,7 @@ router.get("/get-profit-data", adminAuth, async (req, res) => {
             });
 
             return {
-                time: option === 'week' ? moment(interval.time).format('ddd') : option === 'month' ? moment(interval.time).format('dd') : interval.time,
+                time: interval.time,
                 profit: matchingTransaction ? matchingTransaction.totalProfit : 0,
             };
         });
