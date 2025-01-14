@@ -19,9 +19,8 @@ import { subscribeToLogs } from './program/VelasFunContractService';
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-app.use(cors({
-  origin: '*'
-}))
+app.use(cors())
+
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
@@ -42,7 +41,7 @@ const startServer = async () => {
     const server = createServer(app);
     socketio(server);
     await subscribeToLogs()
-    
+
     server.listen(PORT, () => {
       logger.info('App is running at http://localhost:%d in %s mode', PORT, app.get('env'));
     });
