@@ -10,6 +10,7 @@ import fs from 'fs';
 import FAQ from "../models/FAQ";
 import Transaction from "../models/Transaction";
 import moment from "moment";
+import Message from "../models/Feedback";
 
 const router = express.Router();
 
@@ -738,7 +739,7 @@ router.get('/get-total-profit', adminAuth, async (req, res) => {
 
 router.get("/get-profit-data", adminAuth, async (req, res) => {
     try {
-        const { option } = req.query; 
+        const { option } = req.query;
         const now = new Date();
 
         let start: Date;
@@ -782,7 +783,7 @@ router.get("/get-profit-data", adminAuth, async (req, res) => {
         const transactions = await Transaction.aggregate([
             {
                 $match: {
-                    createdAt: { $gte: start, $lt: end }, 
+                    createdAt: { $gte: start, $lt: end },
                 },
             },
             {
@@ -790,9 +791,9 @@ router.get("/get-profit-data", adminAuth, async (req, res) => {
                     _id: {
                         $switch: {
                             branches: [
-                                { case: { $eq: [option, "day"] }, then: { $hour: "$createdAt" } }, 
+                                { case: { $eq: [option, "day"] }, then: { $hour: "$createdAt" } },
                                 { case: { $eq: [option, "week"] }, then: { $dayOfWeek: "$createdAt" } },
-                                { case: { $eq: [option, "month"] }, then: { $dayOfMonth: "$createdAt" } }, 
+                                { case: { $eq: [option, "month"] }, then: { $dayOfMonth: "$createdAt" } },
                             ],
                             default: { $hour: "$createdAt" },
                         },
@@ -826,6 +827,27 @@ router.get("/get-profit-data", adminAuth, async (req, res) => {
         return res.status(500).json(error);
     }
 });
+
+router.delete('/delete-token', adminAuth, async (req, res) => {
+    try {
+        const { id } = req.query;
+        
+        const adminData = await AdminData.findOne();
+        if (adminData && adminData?.currentKing === id) {
+            adminData.currentKing = '';
+            await adminData.save();
+        }
+
+        await Message.deleteMany({ coinId: id });
+        await CoinStatus.deleteMany({ coinId: id });
+        await Coin.deleteOne({ _id: id });
+
+        return res.status(200).json({ success: true });
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({ success: false });
+    }
+})
 
 
 export default router;
