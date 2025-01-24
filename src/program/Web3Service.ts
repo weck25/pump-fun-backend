@@ -6,7 +6,7 @@ export interface Contract {
     abi: any;
 }
 
-const providerUrl = process.env.VELAS_PROVIDER_URL || 'wss://evmexplorer.velas.com/rpc';
+const providerUrl = process.env.WSS_BASE_PROVIDER_URL || '';
 
 export class Web3Service {
     private static instance: Web3Service | null = null;

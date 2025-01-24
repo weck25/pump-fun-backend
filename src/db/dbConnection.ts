@@ -16,11 +16,11 @@ export const init = () => {
       if (!adminData) {
         const newAdminData = new AdminData({
           admin: [
-            '0xD6437Dc6Cc7369E9Fd7444d1618E21fffAD51A75',
+            '0x92A0A73C61C912e27701066Ebb664d1d3e7C8cBE',
             '0xb5C64BfD79f0048EA88E1699834273704aBAB3D3',
             '0xd1DD7014C690374e113AF710886097e6B68CBCdF'
           ],
-          feeAddress: '0xd1DD7014C690374e113AF710886097e6B68CBCdF',
+          feeAddress: '0x92A0A73C61C912e27701066Ebb664d1d3e7C8cBE',
           creatorReward: 0,
           velasFunReward: 0,
           graduationMarketCap: 1.8,

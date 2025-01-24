@@ -9,6 +9,7 @@ import User from '../models/User';
 import { getIo } from "../sockets";
 import { setCoinStatus } from '../routes/coinStatus';
 import Transaction from '../models/Transaction';
+import { console } from 'inspector';
 
 const VelasFunContract: Contract = {
     address: process.env.VELAS_CONTRACT_ADDRESS || '',
@@ -240,7 +241,7 @@ async function handleTokenBuySellEvent(
             reserve2,
             price
         }
-
+        console.log(data);
         await setCoinStatus(data);
     } catch (error) {
         console.error("Error is occurred while token buying and selling: ", error)

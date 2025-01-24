@@ -1,7 +1,7 @@
 import express from 'express';
 import 'dotenv/config.js';
 import bodyParser from 'body-parser';
-import cors from 'cors';
+const cors = require('cors');
 import adminRoutes from './routes/admin';
 import userRoutes from './routes/user';
 import coinRoutes from './routes/coin';
@@ -19,7 +19,11 @@ import { subscribeToLogs } from './program/VelasFunContractService';
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-app.use(cors())
+app.use(cors({
+  origin: 'https://worldfun12.vercel.app',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
