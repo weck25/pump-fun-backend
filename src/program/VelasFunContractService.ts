@@ -241,7 +241,7 @@ async function handleTokenBuySellEvent(
             reserve2,
             price
         }
-        console.log(data);
+        console.log("handle buy or sell",data);
         await setCoinStatus(data);
     } catch (error) {
         console.error("Error is occurred while token buying and selling: ", error)
