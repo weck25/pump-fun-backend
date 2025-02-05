@@ -21,7 +21,7 @@ const PORT = process.env.PORT || 5000;
 
 app.use(cors({
   origin: 'https://worldfun12.vercel.app',
-  methods: ['GET', 'POST', 'OPTIONS'],
+  methods: ['GET, POST, PUT, DELETE, OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
